@@ -799,13 +799,21 @@
     }
 
     function extractOrderNumber(url) {
+        if (!url) return null;
+        const match = url.match(/\/user\/purchase\/order\/([a-zA-Z0-9_-]+)/i) ||
+                      url.match(/[?&]order_id=([a-zA-Z0-9_-]+)/i) ||
+                      url.match(/\/purchase\/order\/([a-zA-Z0-9_-]+)/i);
+        if (match && match[1]) {
+            return match[1];
+        }
         const pattern = '/user/purchase/order/';
         const startIndex = url.indexOf(pattern);
-        if (startIndex === -1) return null;
-        const idStart = startIndex + pattern.length;
-        const idEnd = url.indexOf('?', idStart);
-        const rawId = idEnd !== -1 ? url.substring(idStart, idEnd) : url.substring(idStart);
-        return /^\d+$/.test(rawId) ? rawId : null;
+        if (startIndex !== -1) {
+            const idStart = startIndex + pattern.length;
+            const cleanId = url.substring(idStart).split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
+            if (cleanId) return cleanId;
+        }
+        return null;
     }
 
     function removeDuplicatesFromInput() {
@@ -819,11 +827,9 @@
 
         for (const url of urls) {
             const orderNumber = extractOrderNumber(url);
-            if (orderNumber && !seen.has(orderNumber)) {
-                seen.add(orderNumber);
-                uniqueUrls.push(url);
-            } else if (!orderNumber && url && !seen.has(url)) {
-                seen.add(url);
+            const key = orderNumber || url;
+            if (!seen.has(key)) {
+                seen.add(key);
                 uniqueUrls.push(url);
             }
         }
@@ -839,21 +845,31 @@
 
     function extractOrderLinks() {
         const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
-        const links = Array.from(document.querySelectorAll('a[href*="/user/purchase/order/"]'))
-            .map(a => {
-                const href = a.getAttribute('href');
-                if (href.startsWith('http')) return href;
-                return `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
-            });
+        const selectors = [
+            'a[href*="/user/purchase/order/"]',
+            'a[href*="/user/purchase/order"]',
+            'a[href*="/purchase/order"]',
+            'a[href*="/order/"]'
+        ];
+        const allAnchors = Array.from(document.querySelectorAll(selectors.join(', ')));
 
         const seen = new Set();
         const uniqueLinks = [];
 
-        for (const url of links) {
-            const orderNumber = extractOrderNumber(url);
-            if (orderNumber && !seen.has(orderNumber)) {
-                seen.add(orderNumber);
-                uniqueLinks.push(url);
+        for (const a of allAnchors) {
+            const href = a.getAttribute('href');
+            if (!href) continue;
+
+            let fullUrl = href;
+            if (!fullUrl.startsWith('http')) {
+                fullUrl = `${origin}${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`;
+            }
+
+            const orderNumber = extractOrderNumber(fullUrl);
+            const key = orderNumber || fullUrl;
+            if (!seen.has(key)) {
+                seen.add(key);
+                uniqueLinks.push(fullUrl);
             }
         }
 
@@ -873,9 +889,11 @@
             });
 
             urlInput.value = existingUrls.join('\n');
-            showNotification(`✅ Found ${addedCount} new order link(s)`, 'success');
+            showNotification(`✅ Found ${addedCount || uniqueLinks.length} order link(s)`, 'success');
+            return uniqueLinks.length;
         } else {
-            showNotification('⚠️ No order links found on current screen. Please scroll down.', 'warning');
+            showNotification('⚠️ No order links found on current screen.\n👉 Please go to "My Purchases" (shopee.com.my/user/purchase), select Completed tab, and scroll down.', 'warning');
+            return 0;
         }
     }
 
@@ -1402,13 +1420,23 @@
         updateStatus('🚀 Starting...', 'info');
         currentEntry = 1;
 
-        const urls = urlInput.value
+        let urls = urlInput.value
             .split('\n')
             .map(u => u.trim())
-            .filter(u => u.includes('/user/purchase/order/'));
+            .filter(u => u.includes('/purchase/order') || u.includes('/order/') || (u.startsWith('http') && u.includes('shopee')));
+
+        // If user didn't extract or paste links first, try auto-extracting from current page
+        if (!urls.length) {
+            extractOrderLinks();
+            urls = urlInput.value
+                .split('\n')
+                .map(u => u.trim())
+                .filter(u => u.includes('/purchase/order') || u.includes('/order/') || (u.startsWith('http') && u.includes('shopee')));
+        }
 
         if (!urls.length) {
-            showNotification("⚠️ No valid order URLs found", 'error');
+            showNotification("⚠️ No valid order URLs found in the text box!\n👉 Go to shopee.com.my/user/purchase, scroll down to load orders, and click [Extract Order Links].", 'error');
+            updateStatus("⚠️ No order URLs found. Please scroll down on Purchases page and click [Extract Order Links].", 'warning');
             resetUI();
             return;
         }
