@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.js">
-    <img src="https://img.shields.io/badge/⚡_Direct_Install-SFT.js-success?style=for-the-badge&logo=tampermonkey" alt="Install SFT.js">
+  <a href="https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.user.js">
+    <img src="https://img.shields.io/badge/⚡_Direct_Install-SFT.user.js-success?style=for-the-badge&logo=tampermonkey" alt="Install SFT.user.js">
   </a>
 </p>
 
@@ -74,8 +74,8 @@ Install one of the following recommended browser extensions:
 - [Greasemonkey](https://www.greasespot.net/)
 
 ### Step 2: Install Shopee MY Financial Tracker
-- **One-Click Install:** Click 👉 [**Install SFT.js**](https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.js)
-- *Alternative:* Open your Tampermonkey dashboard, create a new userscript, and paste the code from [`SFT.js`](SFT.js).
+- **One-Click Install:** Click 👉 [**Install SFT.user.js**](https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.user.js)
+- *Alternative:* Open your Tampermonkey dashboard, create a new userscript, and paste the code from [`SFT.user.js`](SFT.user.js).
 
 ---
 
@@ -168,8 +168,8 @@ Pasang salah satu sambungan pelayar web berikut:
 - [Greasemonkey](https://www.greasespot.net/)
 
 #### Langkah 2: Pasang Skrip SFT-MY
-- **Pemasangan Terus:** Klik 👉 [**Pasang SFT.js**](https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.js)
-- *Pilihan Alternatif:* Buka papan pemuka (*dashboard*) Tampermonkey anda, cipta skrip baharu dan salin keseluruhan kod daripada fail [`SFT.js`](SFT.js).
+- **Pemasangan Terus:** Klik 👉 [**Pasang SFT.user.js**](https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.user.js)
+- *Pilihan Alternatif:* Buka papan pemuka (*dashboard*) Tampermonkey anda, cipta skrip baharu dan salin keseluruhan kod daripada fail [`SFT.user.js`](SFT.user.js).
 
 ---
 
