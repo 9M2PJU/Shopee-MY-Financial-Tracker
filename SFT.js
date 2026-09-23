@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Shopee MY Financial Tracker
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Track and analyze your Shopee Malaysia purchases with comprehensive financial reporting (MYR)
 // @author       9M2PJU (Original by Ryu-Sena & pataanggs)
 // @match        https://shopee.com.my/*
@@ -41,6 +41,7 @@
 
     // Global State
     let isParsing = false;
+    let isAutoScrolling = false;
     let currentEntry = 1;
     let parsedData = [];
     let isUIHidden = false;
@@ -51,6 +52,7 @@
     };
     let currentFilters = [];
     let searchQuery = '';
+    const capturedOrderIds = new Set();
 
     // === Inject UI Styles ===
     const style = document.createElement('style');
@@ -94,22 +96,22 @@
 .parser-container {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
 }
 
 .parser-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
-    padding-bottom: 16px;
+    margin-bottom: 8px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--border-color);
     cursor: move;
     user-select: none;
 }
 
 .parser-title {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 600;
     color: var(--text-primary);
     display: flex;
@@ -133,7 +135,7 @@
 
 .parser-table th, .parser-table td {
     border: 1px solid var(--border-color);
-    padding: 12px 16px;
+    padding: 10px 14px;
     text-align: left;
     vertical-align: top;
 }
@@ -156,7 +158,7 @@
 }
 
 .parser-controls {
-    margin-top: 16px;
+    margin-top: 10px;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -164,8 +166,8 @@
 
 .parser-textarea {
     width: 100%;
-    height: 150px;
-    margin-top: 12px;
+    height: 120px;
+    margin-top: 8px;
     padding: 12px 16px;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -185,7 +187,7 @@
 }
 
 .btn {
-    padding: 8px 16px;
+    padding: 8px 14px;
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -224,8 +226,8 @@
 .parser-status {
     font-size: 0.875rem;
     color: var(--text-secondary);
-    margin-top: 8px;
-    padding: 12px;
+    margin-top: 6px;
+    padding: 10px 14px;
     border-radius: 8px;
     background: var(--bg-secondary);
     display: flex;
@@ -238,8 +240,8 @@
     font-size: 0.75rem;
     color: var(--text-secondary);
     text-align: center;
-    margin-top: 16px;
-    padding-top: 16px;
+    margin-top: 12px;
+    padding-top: 12px;
     border-top: 1px solid var(--border-color);
 }
 
@@ -410,8 +412,8 @@
 .filter-controls {
     display: flex;
     gap: 8px;
-    margin-top: 16px;
-    margin-bottom: 8px;
+    margin-top: 10px;
+    margin-bottom: 6px;
     flex-wrap: wrap;
 }
 
@@ -478,7 +480,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 8px;
+    margin-top: 6px;
 }
 
 .filter-tag {
@@ -532,8 +534,8 @@
 .stats-panel {
     display: flex;
     gap: 16px;
-    margin-top: 16px;
-    padding: 16px;
+    margin-top: 12px;
+    padding: 14px;
     background: var(--bg-secondary);
     border-radius: 8px;
     flex-wrap: wrap;
@@ -541,7 +543,7 @@
 
 .stat-item {
     flex: 1;
-    min-width: 200px;
+    min-width: 180px;
 }
 
 .stat-label {
@@ -595,7 +597,7 @@
             <div class="parser-container">
                 <div class="parser-header">
                     <div class="parser-title">
-                        <span>📊 Shopee MY Financial Tracker v2.1</span>
+                        <span>📊 Shopee MY Financial Tracker v2.2</span>
                     </div>
                     <div class="header-controls">
                         <button class="btn btn-gray" id="guide-btn">📘 Guide</button>
@@ -603,18 +605,20 @@
                     </div>
                 </div>
                 <div class="resize-handle"></div>
-                <textarea id="url-input" placeholder="Paste Shopee order links here (one per line) or click 'Extract Order Links'" class="parser-textarea"></textarea>
+                <textarea id="url-input" placeholder="Order links will appear here automatically when extracting or scrolling..." class="parser-textarea"></textarea>
                 <div class="parser-controls">
-                    <button class="btn btn-green" id="start-btn">▶️ Start</button>
+                    <button class="btn btn-green" id="start-btn">▶️ Start Parsing</button>
                     <button class="btn btn-red" id="stop-btn" disabled>⏹️ Stop</button>
+                    <button class="btn btn-blue" id="autoscroll-btn">📜 Auto-Scroll & Extract</button>
+                    <button class="btn btn-gray" id="extract-btn">🔗 Extract Order Links</button>
+                    <button class="btn btn-gray" id="goto-purchase-btn">🛒 Go to My Purchases</button>
                     <button class="btn btn-yellow" id="clear-btn">🗑️ Clear</button>
                     <button class="btn btn-gray" id="remove-dupes-btn">🔍 Remove Duplicates</button>
-                    <button class="btn btn-blue" id="csv-btn">📊 Export CSV</button>
+                    <button class="btn btn-purple" id="csv-btn">📊 Export CSV</button>
                     <button class="btn btn-purple" id="md-btn">📝 Export Markdown</button>
-                    <button class="btn btn-gray" id="extract-btn">🔗 Extract Order Links</button>
                 </div>
                 <div class="parser-status" id="status">Ready</div>
-                <div id="progress-bar-container" style="width: 100%; margin: 12px 0; display: none; position: relative; background: var(--bg-secondary); border-radius: 8px; overflow: hidden; height: 18px;">
+                <div id="progress-bar-container" style="width: 100%; margin: 10px 0; display: none; position: relative; background: var(--bg-secondary); border-radius: 8px; overflow: hidden; height: 18px;">
                     <div id="progress-bar" style="height: 100%; width: 0; background: var(--accent-color); border-radius: 8px; transition: width 0.2s;"></div>
                     <div id="progress-bar-label" style="position: absolute; width: 100%; text-align: center; top: 0; line-height: 18px; color: var(--text-primary); font-size: 0.75rem; font-weight: 500;"></div>
                 </div>
@@ -671,7 +675,7 @@
                     </thead>
                     <tbody id="results-body"></tbody>
                 </table>
-                <div id="grand-total-container" style="margin-top: 20px; text-align: right;">
+                <div id="grand-total-container" style="margin-top: 16px; text-align: right;">
                     <span style="font-size: 1.25rem; font-weight: bold; color: var(--accent-color);">Grand Total: <span id="grand-total-value">RM 0.00</span></span>
                 </div>
                 <div class="credit">Shopee MY Financial Tracker | Adapted by <a href="https://github.com/9M2PJU" target="_blank" style="color: #3b82f6; text-decoration: underline;">9M2PJU</a> | Original by <a href="https://github.com/tukangcode" target="_blank" style="color: #3b82f6; text-decoration: underline;">Ryu-Sena</a></div>
@@ -683,35 +687,28 @@
                 </div>
                 <div class="modal-content">📘 How to Use (Shopee Malaysia):
 
-1. Enable Popups for Shopee Malaysia (shopee.com.my):
-   - Chrome / Brave / Edge: 🔐 (Site Info) > Site Settings > Allow Popups & Redirects
+1. Allow Popups in Browser:
+   - Chrome / Brave / Edge: 🔒 (Site Info) > Site Settings > Allow Pop-ups
    - Firefox: ⓘ (Site Info) > Permissions > Allow Popups
 
-2. Extract Order Links:
-   - Go to "My Purchases" (Pesanan Saya) page on shopee.com.my.
-   - Click on the "Completed" (Selesai) tab.
-   - Scroll down to load order items on the screen.
-   - Click [🔗 Extract Order Links] to capture visible order URLs into the box.
+2. Go to "My Purchases" Page:
+   - Click the [🛒 Go to My Purchases] button or visit: shopee.com.my/user/purchase
+   - Select the "Completed" tab (or "To Receive").
 
-3. Clean Duplicate Links:
-   - Click [🔍 Remove Duplicates] to remove any duplicate order links.
+3. Load & Extract Orders:
+   - Click [📜 Auto-Scroll & Extract] to automatically scroll down and capture all your orders!
+   - Or scroll down manually and click [🔗 Extract Order Links].
 
 4. Start Parsing:
-   - Click [▶️ Start] to begin extracting order details in Malaysian Ringgit (MYR).
-   - The script will automatically open and parse order pages safely with rate-limiting.
+   - Click [▶️ Start Parsing] to calculate all order figures in Malaysian Ringgit (MYR).
+   - The script will safely parse each order page with anti-ban rate limiting.
 
-5. If CAPTCHA Appears:
-   - The script pauses automatically for you to solve the CAPTCHA manually.
-   - Once solved, the script resumes processing.
+5. Export Your Financials:
+   - [📊 Export CSV] for Microsoft Excel / Google Sheets.
+   - [📝 Export Markdown] for documentation and notes.
 
-6. Export Results:
-   - [📊 Export CSV]: Optimized for Microsoft Excel / Google Sheets with proper currency format.
-   - [📝 Export Markdown]: Formatted Markdown table for documentation and note-taking.
-
-7. UI Controls:
-   - Press Ctrl+M anytime to toggle UI visibility.
-   - Click 🌙 / ☀️ to toggle dark/light mode.
-   - Drag header to reposition or drag corner to resize.
+ℹ️ Shortcuts:
+   - Press Ctrl + M anytime to show or hide this panel.
                 </div>
                 <div class="modal-footer">
                     <button class="modal-close" id="modal-ok">OK</button>
@@ -732,6 +729,8 @@
     const statusText = document.getElementById('status');
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
+    const autoscrollBtn = document.getElementById('autoscroll-btn');
+    const gotoPurchaseBtn = document.getElementById('goto-purchase-btn');
     const clearBtn = document.getElementById('clear-btn');
     const csvBtn = document.getElementById('csv-btn');
     const mdBtn = document.getElementById('md-btn');
@@ -759,6 +758,77 @@
     const progressBar = document.getElementById('progress-bar');
     const progressBarLabel = document.getElementById('progress-bar-label');
 
+    // === Real-Time API Interceptor ===
+    function handleCapturedOrderId(orderId) {
+        if (!orderId) return;
+        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
+        const orderUrl = `${origin}/user/purchase/order/${orderId}`;
+        if (!capturedOrderIds.has(String(orderId))) {
+            capturedOrderIds.add(String(orderId));
+            
+            const existingUrls = urlInput.value.split('\n').map(u => u.trim()).filter(Boolean);
+            if (!existingUrls.includes(orderUrl)) {
+                existingUrls.push(orderUrl);
+                urlInput.value = existingUrls.join('\n');
+                updateStatus(`📥 Automatically captured ${existingUrls.length} order link(s)!`, 'info');
+            }
+        }
+    }
+
+    function extractOrderIdsFromApiResponse(data) {
+        if (!data) return;
+        function findIds(obj, depth = 0) {
+            if (!obj || depth > 6) return;
+            if (Array.isArray(obj)) {
+                obj.forEach(item => findIds(item, depth + 1));
+            } else if (typeof obj === 'object') {
+                if (obj.order_id) handleCapturedOrderId(obj.order_id);
+                if (obj.orderid) handleCapturedOrderId(obj.orderid);
+                if (obj.order_sn && /^\d+$/.test(obj.order_sn)) handleCapturedOrderId(obj.order_sn);
+                
+                Object.values(obj).forEach(val => {
+                    if (typeof val === 'object') findIds(val, depth + 1);
+                });
+            }
+        }
+        findIds(data);
+    }
+
+    // Intercept fetch
+    if (typeof window.fetch === 'function') {
+        const originalFetch = window.fetch;
+        window.fetch = async function (...args) {
+            const response = await originalFetch.apply(this, args);
+            try {
+                const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+                if (url.includes('/api/v') && (url.includes('order') || url.includes('purchase'))) {
+                    const clone = response.clone();
+                    clone.json().then(data => extractOrderIdsFromApiResponse(data)).catch(() => {});
+                }
+            } catch (e) {}
+            return response;
+        };
+    }
+
+    // Intercept XHR
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+        this._sft_url = url;
+        return originalOpen.apply(this, [method, url, ...rest]);
+    };
+    XMLHttpRequest.prototype.send = function (...args) {
+        this.addEventListener('load', function () {
+            try {
+                if (this._sft_url && this._sft_url.includes('/api/v') && (this._sft_url.includes('order') || this._sft_url.includes('purchase'))) {
+                    const data = JSON.parse(this.responseText);
+                    extractOrderIdsFromApiResponse(data);
+                }
+            } catch (e) {}
+        });
+        return originalSend.apply(this, args);
+    };
+
     // === Helper Functions ===
     function escapeHtml(str) {
         if (!str) return '';
@@ -776,7 +846,7 @@
         notification.classList.add('show');
         setTimeout(() => {
             notification.classList.remove('show');
-        }, 3000);
+        }, 3500);
     }
 
     function updateStatus(text, type = 'info') {
@@ -802,7 +872,8 @@
         if (!url) return null;
         const match = url.match(/\/user\/purchase\/order\/([a-zA-Z0-9_-]+)/i) ||
                       url.match(/[?&]order_id=([a-zA-Z0-9_-]+)/i) ||
-                      url.match(/\/purchase\/order\/([a-zA-Z0-9_-]+)/i);
+                      url.match(/\/purchase\/order\/([a-zA-Z0-9_-]+)/i) ||
+                      url.match(/\/order\/([a-zA-Z0-9_-]+)/i);
         if (match && match[1]) {
             return match[1];
         }
@@ -813,13 +884,24 @@
             const cleanId = url.substring(idStart).split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
             if (cleanId) return cleanId;
         }
-        return null;
+        return /^\d{8,}$/.test(url.trim()) ? url.trim() : null;
+    }
+
+    function normalizeOrderUrl(line) {
+        if (!line) return '';
+        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
+        const trimmed = line.trim();
+        if (trimmed.startsWith('http')) return trimmed;
+        if (trimmed.startsWith('/')) return `${origin}${trimmed}`;
+        const id = extractOrderNumber(trimmed);
+        if (id) return `${origin}/user/purchase/order/${id}`;
+        return trimmed;
     }
 
     function removeDuplicatesFromInput() {
         const urls = urlInput.value
             .split('\n')
-            .map(u => u.trim())
+            .map(u => normalizeOrderUrl(u))
             .filter(Boolean);
 
         const seen = new Set();
@@ -843,28 +925,35 @@
         }
     }
 
-    function extractOrderLinks() {
+    function extractOrderLinks(silent = false) {
         const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
         const selectors = [
             'a[href*="/user/purchase/order/"]',
             'a[href*="/user/purchase/order"]',
             'a[href*="/purchase/order"]',
-            'a[href*="/order/"]'
+            'a[href*="/order/"]',
+            'a[href*="order_id"]',
+            '[data-order-id]',
+            '[data-order-sn]',
+            '[data-orderid]'
         ];
-        const allAnchors = Array.from(document.querySelectorAll(selectors.join(', ')));
+        const allElements = Array.from(document.querySelectorAll(selectors.join(', ')));
 
         const seen = new Set();
         const uniqueLinks = [];
 
-        for (const a of allAnchors) {
-            const href = a.getAttribute('href');
-            if (!href) continue;
-
-            let fullUrl = href;
-            if (!fullUrl.startsWith('http')) {
-                fullUrl = `${origin}${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`;
+        for (const el of allElements) {
+            let fullUrl = '';
+            if (el.tagName === 'A') {
+                const href = el.getAttribute('href');
+                if (!href) continue;
+                fullUrl = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+            } else {
+                const id = el.dataset.orderId || el.dataset.orderSn || el.dataset.orderid;
+                if (id) fullUrl = `${origin}/user/purchase/order/${id}`;
             }
 
+            if (!fullUrl) continue;
             const orderNumber = extractOrderNumber(fullUrl);
             const key = orderNumber || fullUrl;
             if (!seen.has(key)) {
@@ -876,7 +965,7 @@
         if (uniqueLinks.length > 0) {
             const existingUrls = urlInput.value
                 .split('\n')
-                .map(u => u.trim())
+                .map(u => normalizeOrderUrl(u))
                 .filter(Boolean);
 
             const allUrlsSet = new Set(existingUrls);
@@ -884,16 +973,63 @@
             uniqueLinks.forEach(u => {
                 if (!allUrlsSet.has(u)) {
                     existingUrls.push(u);
+                    allUrlsSet.add(u);
                     addedCount++;
                 }
             });
 
             urlInput.value = existingUrls.join('\n');
-            showNotification(`✅ Found ${addedCount || uniqueLinks.length} order link(s)`, 'success');
-            return uniqueLinks.length;
+            if (!silent) {
+                showNotification(`✅ Captured ${existingUrls.length} total order link(s)!`, 'success');
+                updateStatus(`✅ ${existingUrls.length} order link(s) ready in box. Click [▶️ Start Parsing] to process.`, 'info');
+            }
+            return existingUrls.length;
         } else {
-            showNotification('⚠️ No order links found on current screen.\n👉 Please go to "My Purchases" (shopee.com.my/user/purchase), select Completed tab, and scroll down.', 'warning');
+            if (!silent) {
+                if (!window.location.href.includes('/user/purchase')) {
+                    showNotification('👉 Please navigate to "My Purchases" page first!', 'warning');
+                    updateStatus('👉 Not on Purchases page. Click [🛒 Go to My Purchases] above.', 'warning');
+                } else {
+                    showNotification('⚠️ No orders found on screen. Click [📜 Auto-Scroll & Extract] to load past orders.', 'warning');
+                    updateStatus('⚠️ Please scroll down the page to load orders, or click [📜 Auto-Scroll & Extract].', 'warning');
+                }
+            }
             return 0;
+        }
+    }
+
+    async function autoScrollAndExtract() {
+        if (!window.location.href.includes('/user/purchase')) {
+            showNotification('🛒 Navigating to My Purchases page...', 'info');
+            window.location.href = 'https://shopee.com.my/user/purchase';
+            return;
+        }
+
+        if (isAutoScrolling) return;
+        isAutoScrolling = true;
+        autoscrollBtn.disabled = true;
+        updateStatus('📜 Auto-scrolling page to load orders from Shopee...', 'info');
+        showNotification('📜 Auto-scrolling down to trigger order loading...', 'info');
+
+        try {
+            for (let i = 1; i <= 6; i++) {
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                await cancellableDelay(1200);
+                extractOrderLinks(true);
+                const currentCount = urlInput.value.split('\n').filter(Boolean).length;
+                updateStatus(`📜 Scrolling step ${i}/6... (Captured ${currentCount} orders so far)`, 'info');
+            }
+        } finally {
+            isAutoScrolling = false;
+            autoscrollBtn.disabled = false;
+        }
+
+        const totalLinks = urlInput.value.split('\n').filter(Boolean).length;
+        if (totalLinks > 0) {
+            showNotification(`✅ Auto-scroll complete! Loaded ${totalLinks} order(s).`, 'success');
+            updateStatus(`✅ Ready! ${totalLinks} order link(s) loaded. Click [▶️ Start Parsing] to begin.`, 'success');
+        } else {
+            showNotification('⚠️ No orders detected. Please make sure you are logged in and on the Completed tab.', 'warning');
         }
     }
 
@@ -914,13 +1050,10 @@
         str = str.replace(/[^\d,.-]/g, '');
         if (!str) return 0;
 
-        // In Shopee MY (MYR), standard format is 1,234.50 (comma thousands, dot decimals)
         if (str.includes(',') && str.includes('.')) {
             if (str.indexOf(',') < str.indexOf('.')) {
-                // MYR/USD format 1,234.56
                 str = str.replace(/,/g, '');
             } else {
-                // Indonesian format 1.234,56
                 str = str.replace(/\./g, '').replace(/,/g, '.');
             }
         } else if (str.includes(',')) {
@@ -970,7 +1103,6 @@
     function getFilteredData() {
         let filtered = [...parsedData];
 
-        // Apply search
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             filtered = filtered.filter(order => {
@@ -986,7 +1118,6 @@
             });
         }
 
-        // Apply filters
         currentFilters.forEach(filter => {
             filtered = filtered.filter(order => {
                 return (order.items || []).some(item => {
@@ -1018,7 +1149,6 @@
             });
         });
 
-        // Apply sorting
         if (currentSort.column) {
             filtered.sort((a, b) => {
                 let aValue = '';
@@ -1219,7 +1349,6 @@
             });
         });
 
-        // Summary row for Grand Total
         csv += [
             '', '', '', '', '', '', 'Grand Total', grandTotal.toFixed(2), ''
         ].join(CONFIG.CSV_DELIMITER) + '\n';
@@ -1269,7 +1398,7 @@
     function cancellableDelay(ms) {
         return new Promise((resolve) => {
             const checkInterval = setInterval(() => {
-                if (!isParsing) {
+                if (!isParsing && !isAutoScrolling) {
                     clearInterval(checkInterval);
                     resolve();
                 }
@@ -1422,21 +1551,25 @@
 
         let urls = urlInput.value
             .split('\n')
-            .map(u => u.trim())
+            .map(u => normalizeOrderUrl(u))
             .filter(u => u.includes('/purchase/order') || u.includes('/order/') || (u.startsWith('http') && u.includes('shopee')));
 
-        // If user didn't extract or paste links first, try auto-extracting from current page
         if (!urls.length) {
-            extractOrderLinks();
+            extractOrderLinks(true);
             urls = urlInput.value
                 .split('\n')
-                .map(u => u.trim())
+                .map(u => normalizeOrderUrl(u))
                 .filter(u => u.includes('/purchase/order') || u.includes('/order/') || (u.startsWith('http') && u.includes('shopee')));
         }
 
         if (!urls.length) {
-            showNotification("⚠️ No valid order URLs found in the text box!\n👉 Go to shopee.com.my/user/purchase, scroll down to load orders, and click [Extract Order Links].", 'error');
-            updateStatus("⚠️ No order URLs found. Please scroll down on Purchases page and click [Extract Order Links].", 'warning');
+            if (!window.location.href.includes('/user/purchase')) {
+                showNotification("👉 Please click [🛒 Go to My Purchases] to open your orders page first!", 'error');
+                updateStatus("👉 Please click [🛒 Go to My Purchases] to open your orders page first.", 'warning');
+            } else {
+                showNotification("⚠️ No orders found on page!\n👉 Click [📜 Auto-Scroll & Extract] to load past orders.", 'error');
+                updateStatus("⚠️ No order URLs found. Click [📜 Auto-Scroll & Extract] to load your orders.", 'warning');
+            }
             resetUI();
             return;
         }
@@ -1523,16 +1656,23 @@
         }
     });
 
+    autoscrollBtn.addEventListener('click', autoScrollAndExtract);
+
+    gotoPurchaseBtn.addEventListener('click', () => {
+        window.location.href = 'https://shopee.com.my/user/purchase';
+    });
+
     clearBtn.addEventListener('click', () => {
         if (confirm("Clear all data?")) {
             clearResults();
+            urlInput.value = '';
             showNotification('🧹 Data cleared', 'info');
         }
     });
 
     csvBtn.addEventListener('click', () => exportData('csv'));
     mdBtn.addEventListener('click', () => exportData('markdown'));
-    extractBtn.addEventListener('click', extractOrderLinks);
+    extractBtn.addEventListener('click', () => extractOrderLinks(false));
     removeDupesBtn.addEventListener('click', removeDuplicatesFromInput);
 
     guideBtn.addEventListener('click', () => {
@@ -1565,7 +1705,13 @@
 
     // === Initialize ===
     function init() {
-        updateStatus("Ready", 'info');
+        if (!window.location.href.includes('/user/purchase')) {
+            updateStatus("💡 Tip: Click [🛒 Go to My Purchases] to open your orders page.", 'info');
+        } else {
+            updateStatus("Ready! Click [📜 Auto-Scroll & Extract] to load your orders.", 'info');
+            // Auto scan existing DOM
+            setTimeout(() => extractOrderLinks(true), 1500);
+        }
         showNotification('Shopee MY Financial Tracker ready!', 'success');
         makeDraggable(parserUI);
     }
