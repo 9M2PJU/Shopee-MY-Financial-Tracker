@@ -12,7 +12,7 @@
   <a href="https://github.com/9M2PJU/Shopee-MY-Financial-Tracker/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.tampermonkey.net/"><img src="https://img.shields.io/badge/Userscript-Tampermonkey-orange.svg" alt="Userscript"></a>
   <a href="https://shopee.com.my"><img src="https://img.shields.io/badge/Platform-Shopee%20Malaysia%20(MYR)-ee4d2d.svg" alt="Shopee Malaysia"></a>
-  <a href="SFT.js"><img src="https://img.shields.io/badge/Version-2.1-blue.svg" alt="Version 2.1"></a>
+  <a href="SFT.js"><img src="https://img.shields.io/badge/Version-2.5-blue.svg" alt="Version 2.5"></a>
 </p>
 
 <p align="center">

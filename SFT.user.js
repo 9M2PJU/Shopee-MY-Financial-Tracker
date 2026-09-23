@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Shopee MY Financial Tracker
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  Track and analyze your Shopee Malaysia purchases with comprehensive financial reporting (MYR)
 // @author       9M2PJU (Original by Ryu-Sena & pataanggs)
 // @match        https://shopee.com.my/*
@@ -10,9 +10,6 @@
 // @run-at       document-end
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
-// @grant        unsafeWindow
-// @connect      shopee.com.my
-// @connect      shopee.co.id
 // @updateURL    https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.user.js
 // @downloadURL  https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.user.js
 // ==/UserScript==
@@ -22,8 +19,8 @@
 
     // Configuration
     const CONFIG = {
-        PAGE_LOAD_TIMEOUT: 18000,
-        BETWEEN_DELAY: 1500,
+        PAGE_LOAD_TIMEOUT: 20000,
+        BETWEEN_DELAY: 3000,
         MAX_RETRIES: 3,
         UI_TOGGLE_KEY: 'KeyM',
         THEME_KEY: 'shopee_parser_theme',
@@ -53,93 +50,6 @@
     };
     let currentFilters = [];
     let searchQuery = '';
-    const capturedOrderIds = new Set();
-
-    // Context helper
-    const winContext = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-
-    function handleCapturedOrderId(orderId) {
-        if (!orderId) return;
-        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
-        const orderUrl = `${origin}/user/purchase/order/${orderId}`;
-        const strId = String(orderId);
-        if (!capturedOrderIds.has(strId)) {
-            capturedOrderIds.add(strId);
-            const inputEl = document.getElementById('url-input');
-            if (inputEl) {
-                const existingUrls = inputEl.value.split('\n').map(u => u.trim()).filter(Boolean);
-                if (!existingUrls.includes(orderUrl)) {
-                    existingUrls.push(orderUrl);
-                    inputEl.value = existingUrls.join('\n');
-                    updateStatus(`📥 Auto-captured ${existingUrls.length} order link(s) from Shopee!`, 'info');
-                }
-            }
-        }
-    }
-
-    function extractOrderIdsFromJson(obj, set, depth = 0) {
-        if (!obj || depth > 6) return;
-        if (Array.isArray(obj)) {
-            obj.forEach(item => extractOrderIdsFromJson(item, set, depth + 1));
-        } else if (typeof obj === 'object') {
-            if (obj.order_id) {
-                if (set) set.add(String(obj.order_id));
-                handleCapturedOrderId(obj.order_id);
-            }
-            if (obj.orderid) {
-                if (set) set.add(String(obj.orderid));
-                handleCapturedOrderId(obj.orderid);
-            }
-            if (obj.order_sn) {
-                if (set) set.add(String(obj.order_sn));
-                handleCapturedOrderId(obj.order_sn);
-            }
-            Object.values(obj).forEach(val => {
-                if (typeof val === 'object') extractOrderIdsFromJson(val, set, depth + 1);
-            });
-        }
-    }
-
-    // Intercept fetch
-    try {
-        if (winContext && typeof winContext.fetch === 'function') {
-            const originalFetch = winContext.fetch;
-            winContext.fetch = async function (...args) {
-                const response = await originalFetch.apply(this, args);
-                try {
-                    const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-                    if (url.includes('/api/v') && (url.includes('order') || url.includes('purchase'))) {
-                        const clone = response.clone();
-                        clone.json().then(data => extractOrderIdsFromJson(data)).catch(() => {});
-                    }
-                } catch (e) {}
-                return response;
-            };
-        }
-    } catch (e) {}
-
-    // Intercept XHR
-    try {
-        if (winContext && winContext.XMLHttpRequest) {
-            const originalOpen = winContext.XMLHttpRequest.prototype.open;
-            const originalSend = winContext.XMLHttpRequest.prototype.send;
-            winContext.XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-                this._sft_url = url;
-                return originalOpen.apply(this, [method, url, ...rest]);
-            };
-            winContext.XMLHttpRequest.prototype.send = function (...args) {
-                this.addEventListener('load', function () {
-                    try {
-                        if (this._sft_url && this._sft_url.includes('/api/v') && (this._sft_url.includes('order') || this._sft_url.includes('purchase'))) {
-                            const data = JSON.parse(this.responseText);
-                            extractOrderIdsFromJson(data);
-                        }
-                    } catch (e) {}
-                });
-                return originalSend.apply(this, args);
-            };
-        }
-    } catch (e) {}
 
     // === Inject UI Styles ===
     const style = document.createElement('style');
@@ -647,33 +557,6 @@
 
 .stat-value.positive { color: var(--success-color); }
 .stat-value.negative { color: var(--error-color); }
-
-.guide-highlight {
-    border: 2px solid #f59e0b !important;
-    box-shadow: 0 0 12px 2px #f59e0b66 !important;
-    animation: pulse-guide 1.2s infinite;
-    position: relative;
-}
-
-@keyframes pulse-guide {
-    0% { box-shadow: 0 0 12px 2px #f59e0b66; }
-    50% { box-shadow: 0 0 24px 6px #f59e0b99; }
-    100% { box-shadow: 0 0 12px 2px #f59e0b66; }
-}
-
-.guide-badge {
-    position: absolute;
-    top: -10px;
-    right: -10px;
-    background: #f59e0b;
-    color: #fff;
-    font-size: 0.7rem;
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 8px;
-    z-index: 2;
-    box-shadow: 0 2px 6px #f59e0b55;
-}
 `;
 
     document.head.appendChild(style);
@@ -684,7 +567,7 @@
             <div class="parser-container">
                 <div class="parser-header">
                     <div class="parser-title">
-                        <span>📊 Shopee MY Financial Tracker v2.4</span>
+                        <span>📊 Shopee MY Financial Tracker v2.5</span>
                     </div>
                     <div class="header-controls">
                         <button class="btn btn-gray" id="guide-btn">📘 Guide</button>
@@ -692,12 +575,11 @@
                     </div>
                 </div>
                 <div class="resize-handle"></div>
-                <textarea id="url-input" placeholder="Paste order links or IDs here (one per line), or use the buttons below to extract automatically..." class="parser-textarea"></textarea>
+                <textarea id="url-input" placeholder="Paste Shopee order links here (one per line) or click 'Auto-Scroll' / 'Extract Visible Links'..." class="parser-textarea"></textarea>
                 <div class="parser-controls">
                     <button class="btn btn-green" id="start-btn">▶️ Start Parsing</button>
                     <button class="btn btn-red" id="stop-btn" disabled>⏹️ Stop</button>
-                    <button class="btn btn-orange" id="api-fetch-btn">⚡ Fetch Orders (API)</button>
-                    <button class="btn btn-blue" id="autoscroll-btn">📜 Auto-Scroll & Extract</button>
+                    <button class="btn btn-blue" id="autoscroll-btn">📜 Auto-Scroll Page</button>
                     <button class="btn btn-gray" id="extract-btn">🔗 Extract Visible Links</button>
                     <button class="btn btn-gray" id="goto-purchase-btn">🛒 Go to My Purchases</button>
                     <button class="btn btn-yellow" id="clear-btn">🗑️ Clear</button>
@@ -775,21 +657,24 @@
                 </div>
                 <div class="modal-content">📘 How to Use (Shopee Malaysia):
 
-1. Go to "My Purchases" Page:
-   - Click [🛒 Go to My Purchases] button or visit: shopee.com.my/user/purchase
+1. Allow Popups in Browser:
+   - Chrome / Brave / Edge: 🔒 (Site Info) > Site Settings > Allow Pop-ups
+   - Firefox: ⓘ (Site Info) > Permissions > Allow Popups
+
+2. Go to "My Purchases" Page:
+   - Click [🛒 Go to My Purchases] or visit: shopee.com.my/user/purchase
    - Select the "Completed" tab (or "To Receive").
 
-2. Load Orders:
-   - Method A (Fastest): Click [⚡ Fetch Orders (API)] to grab orders directly via Shopee session.
-   - Method B: Click [📜 Auto-Scroll & Extract] to automatically scroll down and scan order cards.
-   - Method C: Scroll down manually and click [🔗 Extract Visible Links].
-   - Method D: Paste Shopee order URLs or Order IDs directly into the text box.
+3. Load Order Links:
+   - Click [📜 Auto-Scroll Page] to automatically scroll down and capture all your orders!
+   - Or scroll down manually and click [🔗 Extract Visible Links].
+   - Or paste your Shopee order URLs into the box.
 
-3. Start Parsing:
+4. Start Parsing:
    - Click [▶️ Start Parsing] to calculate all order figures in Malaysian Ringgit (MYR).
-   - In v2.4, orders are fetched directly via API with 100% precision and zero popup issues!
+   - The script will open each order, wait for the page to render, and calculate exact totals.
 
-4. Export Your Financials:
+5. Export Your Financials:
    - [📊 Export CSV] for Microsoft Excel / Google Sheets.
    - [📝 Export Markdown] for documentation and notes.
 
@@ -815,7 +700,6 @@
     const statusText = document.getElementById('status');
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
-    const apiFetchBtn = document.getElementById('api-fetch-btn');
     const autoscrollBtn = document.getElementById('autoscroll-btn');
     const gotoPurchaseBtn = document.getElementById('goto-purchase-btn');
     const clearBtn = document.getElementById('clear-btn');
@@ -951,16 +835,6 @@
         }).format(amount || 0);
     }
 
-    function parseShopeeApiPrice(val) {
-        if (typeof val === 'number') {
-            if (val > 10000) {
-                return val / 100000;
-            }
-            return val;
-        }
-        return parseCurrency(val);
-    }
-
     function parseCurrency(amount) {
         if (typeof amount === 'number') return isNaN(amount) ? 0 : amount;
         if (!amount) return 0;
@@ -993,74 +867,8 @@
         return isNaN(val) ? 0 : val;
     }
 
-    // === API Fetcher ===
-    async function fetchOrdersFromShopeeApi() {
-        updateStatus('⚡ Fetching complete order history directly from Shopee API...', 'info');
-        showNotification('⚡ Contacting Shopee Order API (All Pages)...', 'info');
-        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
-        const foundIds = new Set();
-        const fetchFunc = (typeof unsafeWindow !== 'undefined' && unsafeWindow.fetch) ? unsafeWindow.fetch : window.fetch;
-
-        const tabs = [3, 0]; // 3 = Completed, 0 = All
-
-        for (const tabId of tabs) {
-            let offset = 0;
-            const limit = 30;
-            let hasMore = true;
-
-            while (hasMore && offset <= 600) {
-                try {
-                    const url = `${origin}/api/v4/order/get_all_order_list?limit=${limit}&offset=${offset}&tab_id=${tabId}`;
-                    const res = await fetchFunc(url, {
-                        method: 'GET',
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        credentials: 'include'
-                    });
-
-                    if (res.ok) {
-                        const json = await res.json();
-                        const beforeCount = foundIds.size;
-                        extractOrderIdsFromJson(json, foundIds);
-                        const newFound = foundIds.size - beforeCount;
-
-                        updateStatus(`⚡ API fetched ${foundIds.size} orders (Offset: ${offset})...`, 'info');
-
-                        if (newFound === 0) {
-                            hasMore = false;
-                        } else {
-                            offset += limit;
-                            await cancellableDelay(300);
-                        }
-                    } else {
-                        hasMore = false;
-                    }
-                } catch (err) {
-                    console.warn('Shopee API fetch error:', err);
-                    hasMore = false;
-                }
-            }
-            if (foundIds.size > 0) break;
-        }
-
-        if (foundIds.size > 0) {
-            const existing = urlInput.value.split('\n').map(u => normalizeOrderUrl(u)).filter(Boolean);
-            const set = new Set(existing);
-            foundIds.forEach(id => set.add(`${origin}/user/purchase/order/${id}`));
-            urlInput.value = Array.from(set).join('\n');
-            showNotification(`⚡ Successfully loaded ${set.size} total orders across your entire purchase history!`, 'success');
-            updateStatus(`⚡ API loaded ${set.size} orders. Click [▶️ Start Parsing] to calculate.`, 'success');
-            return set.size;
-        } else {
-            showNotification('⚠️ Shopee API returned 0 orders. Make sure you are logged in.', 'warning');
-            updateStatus('⚠️ API found no orders. Try [📜 Auto-Scroll & Extract] to load on screen.', 'warning');
-            return 0;
-        }
-    }
-
-    async function extractOrderLinks(silent = false) {
+    // === Link Extraction on My Purchases page ===
+    function extractOrderLinks(silent = false) {
         const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
         const foundUrls = new Set();
 
@@ -1087,20 +895,12 @@
             }
         });
 
-        // 3. Scan DOM text for Shopee Order SN patterns (YYMMDD+alphanumeric, e.g. 240924ABC123)
+        // 3. Scan DOM text for Shopee Order SN patterns (YYMMDD+alphanumeric)
         const bodyText = document.body.innerText || '';
         const snMatches = bodyText.match(/\b2[0-9](?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])[A-Za-z0-9_-]{5,}\b/g) || [];
         snMatches.forEach(sn => {
             foundUrls.add(`${origin}/user/purchase/order/${sn}`);
         });
-
-        // 4. Fallback: If nothing found in DOM, query Shopee API
-        if (foundUrls.size === 0) {
-            try {
-                const apiCount = await fetchOrdersFromShopeeApi();
-                if (apiCount > 0) return apiCount;
-            } catch (e) {}
-        }
 
         if (foundUrls.size > 0) {
             const existingUrls = urlInput.value.split('\n').map(u => normalizeOrderUrl(u)).filter(Boolean);
@@ -1119,8 +919,8 @@
                     showNotification('👉 Please click [🛒 Go to My Purchases] to open your orders page!', 'warning');
                     updateStatus('👉 Please click [🛒 Go to My Purchases] to open your orders page.', 'warning');
                 } else {
-                    showNotification('⚠️ No orders found on screen. Click [⚡ Fetch Orders (API)] or [📜 Auto-Scroll].', 'warning');
-                    updateStatus('⚠️ Please scroll down or click [⚡ Fetch Orders (API)].', 'warning');
+                    showNotification('⚠️ No orders visible on screen. Click [📜 Auto-Scroll Page] to load them.', 'warning');
+                    updateStatus('⚠️ Please scroll down the page or click [📜 Auto-Scroll Page].', 'warning');
                 }
             }
             return 0;
@@ -1138,8 +938,8 @@
         isAutoScrolling = true;
         autoscrollBtn.disabled = true;
         stopBtn.disabled = false;
-        updateStatus('📜 Auto-scrolling to the very end of your purchase history...', 'info');
-        showNotification('📜 Auto-scrolling to the end... Click [⏹️ Stop] anytime to halt.', 'info');
+        updateStatus('📜 Auto-scrolling page to load all past orders...', 'info');
+        showNotification('📜 Auto-scrolling down to load orders... Click [⏹️ Stop] anytime to halt.', 'info');
 
         let noChangeCount = 0;
         let lastHeight = 0;
@@ -1152,6 +952,7 @@
 
                 window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 
+                // Click any 'Load More' or pagination buttons if present
                 const loadMoreBtns = Array.from(document.querySelectorAll('button, a')).filter(el => {
                     const text = (el.textContent || '').toLowerCase().trim();
                     return text === 'load more' || text === 'see more' || text === 'muat lagi' || text === 'lebih banyak';
@@ -1160,10 +961,10 @@
                     try { btn.click(); } catch (e) {}
                 });
 
-                await cancellableDelay(1600);
+                await cancellableDelay(1500);
                 if (!isAutoScrolling) break;
 
-                await extractOrderLinks(true);
+                extractOrderLinks(true);
                 const currentCount = getValidOrderUrls().length;
                 const currentHeight = document.body.scrollHeight;
 
@@ -1173,7 +974,7 @@
                     noChangeCount++;
                     if (noChangeCount === 1) {
                         window.scrollBy(0, -400);
-                        await cancellableDelay(600);
+                        await cancellableDelay(500);
                         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
                     }
                     if (noChangeCount >= 3) {
@@ -1194,183 +995,173 @@
         if (totalLinks > 0) {
             showNotification(`✅ Reached the end! Loaded ${totalLinks} total order(s).`, 'success');
             updateStatus(`✅ Complete! ${totalLinks} order link(s) captured. Click [▶️ Start Parsing] to calculate.`, 'success');
-        } else {
-            await fetchOrdersFromShopeeApi();
         }
     }
 
-    // === Scraper Architecture (Direct API + DOM Fallback) ===
-    function parseOrderDetailFromApiResponse(orderData, url, entryNumber) {
-        if (!orderData) return null;
+    function cancellableDelay(ms) {
+        return new Promise((resolve) => {
+            const checkInterval = setInterval(() => {
+                if (!isParsing && !isAutoScrolling) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
 
-        // Shop Name
-        const shopName = orderData.shop_info?.shop_name ||
-                         orderData.seller_user?.username ||
-                         orderData.shop_name ||
-                         orderData.seller_name ||
-                         'Shopee Seller';
-
-        // Order Date
-        let orderDate = 'NOT FOUND';
-        const timeStamp = orderData.create_time || orderData.paid_time || orderData.order_time || orderData.pay_time;
-        if (timeStamp) {
-            const dateObj = new Date(timeStamp > 1e11 ? timeStamp : timeStamp * 1000);
-            orderDate = dateObj.toLocaleDateString('en-GB', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-
-        // Collect all items
-        const rawItems = [];
-        if (orderData.items && Array.isArray(orderData.items)) rawItems.push(...orderData.items);
-        if (orderData.item_list && Array.isArray(orderData.item_list)) rawItems.push(...orderData.item_list);
-        if (orderData.package_list && Array.isArray(orderData.package_list)) {
-            orderData.package_list.forEach(pkg => {
-                if (pkg.item_list && Array.isArray(pkg.item_list)) rawItems.push(...pkg.item_list);
-                if (pkg.items && Array.isArray(pkg.items)) rawItems.push(...pkg.items);
-            });
-        }
-
-        const items = [];
-        rawItems.forEach(item => {
-            const name = item.item_name || item.name || item.model_name || 'Shopee Product';
-            const quantity = parseInt(item.amount || item.quantity || item.count || 1) || 1;
-
-            let origPrice = parseShopeeApiPrice(item.original_price || item.item_price || item.order_price || 0);
-            let discPrice = parseShopeeApiPrice(item.order_price || item.item_price || item.discounted_price || item.final_price || origPrice);
-
-            if (!origPrice && discPrice) origPrice = discPrice;
-            if (!discPrice && origPrice) discPrice = origPrice;
-
-            const itemTotal = discPrice * quantity;
-
-            items.push({
-                name: name,
-                originalPrice: formatCurrency(origPrice),
-                discountPrice: formatCurrency(discPrice),
-                quantity: quantity,
-                total: itemTotal,
-                totalPesanan: formatCurrency(itemTotal)
-            });
+            const timeout = setTimeout(() => {
+                clearInterval(checkInterval);
+                resolve();
+            }, ms);
         });
+    }
 
-        if (items.length === 0) return null;
+    // Wait for React to mount and render prices / products on the order detail page
+    function waitForOrderContent(win, maxWaitMs = 15000) {
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+            const timer = setInterval(() => {
+                if (!isParsing || !win || win.closed || !win.document) {
+                    clearInterval(timer);
+                    resolve(null);
+                    return;
+                }
 
-        return {
-            Entry: entryNumber,
-            Shop: shopName,
-            'Order Date': orderDate,
-            items: items,
-            URL: url
-        };
+                try {
+                    const doc = win.document;
+                    const bodyText = doc.body ? doc.body.innerText || '' : '';
+
+                    // Check if prices (RM ...) or order details have rendered
+                    const hasRenderedPrice = /RM\s*\d+/i.test(bodyText);
+                    const hasItemElement = doc.querySelector('a[href*="/product/"], a[href*="-i."], [class*="order"], [class*="item"], [class*="product"], [class*="price"]');
+
+                    if ((hasRenderedPrice && hasItemElement) || Date.now() - startTime > maxWaitMs) {
+                        clearInterval(timer);
+                        resolve(doc);
+                    }
+                } catch (e) {
+                    if (Date.now() - startTime > maxWaitMs) {
+                        clearInterval(timer);
+                        resolve(null);
+                    }
+                }
+            }, 400);
+        });
     }
 
     async function scrapeOrderDetail(url, entryNumber) {
-        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
-        const orderId = extractOrderNumber(url);
-
-        // Strategy 1: Direct Shopee API (Instant, exact, no popups)
-        if (orderId) {
-            try {
-                const fetchFunc = (typeof unsafeWindow !== 'undefined' && unsafeWindow.fetch) ? unsafeWindow.fetch : window.fetch;
-                const endpoints = [
-                    `${origin}/api/v4/order/get_order_detail?order_id=${orderId}`,
-                    `${origin}/api/v4/order/get_order_detail?order_sn=${orderId}`,
-                    `${origin}/api/v2/order/get_order_detail?order_id=${orderId}`,
-                    `${origin}/api/v4/order/get_order_detail?orderid=${orderId}`
-                ];
-
-                for (const ep of endpoints) {
-                    const res = await fetchFunc(ep, {
-                        method: 'GET',
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        credentials: 'include'
-                    });
-
-                    if (res.ok) {
-                        const json = await res.json();
-                        const orderData = json.data || json;
-                        const parsed = parseOrderDetailFromApiResponse(orderData, url, entryNumber);
-                        if (parsed && parsed.items && parsed.items.length > 0) {
-                            return parsed;
-                        }
-                    }
-                }
-            } catch (err) {
-                console.warn('API detail fetch error:', err);
-            }
-        }
-
-        // Strategy 2: Popup DOM fallback
-        return await scrapeOrderDetailFromDom(url, entryNumber);
-    }
-
-    async function scrapeOrderDetailFromDom(url, entryNumber) {
         let retryCount = 0;
         while (retryCount <= CONFIG.MAX_RETRIES && isParsing) {
             const win = window.open(url, '_blank');
             if (!win) {
-                showNotification("❌ Popup blocked - Please allow popups for Shopee in browser settings", 'error');
+                showNotification("❌ Popup blocked - Please allow popups for Shopee in your browser settings", 'error');
                 return null;
             }
 
             try {
-                await waitForPageLoad(win);
-                if (!isParsing) {
+                const doc = await waitForOrderContent(win, CONFIG.PAGE_LOAD_TIMEOUT);
+                if (!isParsing || !doc) {
                     try { win.close(); } catch (e) {}
                     return null;
                 }
 
-                await cancellableDelay(3000);
-                const doc = win.document;
+                // Add small settling delay for React subcomponents
+                await cancellableDelay(1500);
 
-                // Shop Name
-                const shopEl = doc.querySelector('.UDaMW3, .order-detail__header-shop-name, a[href*="/shop/"], [class*="shop-name"], [class*="seller-name"]');
-                const shopName = shopEl?.textContent.trim() || 'Shopee Seller';
+                // 1. Shop Name
+                const shopEl = doc.querySelector('.UDaMW3, .order-detail__header-shop-name, a[href*="/shop/"], a[href*="/shop"], [class*="shop-name"], [class*="seller-name"]');
+                let shopName = shopEl?.textContent.trim();
+                if (!shopName || shopName.length < 2) {
+                    // Fallback search
+                    const shopAnchor = Array.from(doc.querySelectorAll('a')).find(a => (a.getAttribute('href') || '').includes('/shop'));
+                    shopName = shopAnchor?.textContent.trim() || 'Shopee Shop';
+                }
 
-                // Order Date
+                // 2. Order Date
                 const dateEl = doc.querySelector('.stepper__step-date, .order-detail__date, [class*="step-date"], [class*="order-date"]');
-                const orderDate = dateEl?.textContent.trim() || new Date().toLocaleDateString('en-GB');
+                let orderDate = dateEl?.textContent.trim();
+                if (!orderDate) {
+                    const bodyText = doc.body.innerText || '';
+                    const dateMatch = bodyText.match(/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/) ||
+                                      bodyText.match(/\b\d{4}[-/]\d{2}[-/]\d{2}\b/) ||
+                                      bodyText.match(/\b\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}\b/);
+                    orderDate = dateMatch ? dateMatch[0] : new Date().toLocaleDateString('en-GB');
+                }
 
-                // Items
+                // 3. Find Item Rows
+                // Search for all containers containing product information
                 let itemElements = Array.from(doc.querySelectorAll('a.mZ1OWk, div.mZ1OWk, .order-detail-product, [class*="order-item"], [class*="product-item"], [class*="item-card"]'));
+
+                // If specific classes not found, scan all divs containing price patterns
+                if (!itemElements.length) {
+                    const allDivs = Array.from(doc.querySelectorAll('div, section, li'));
+                    itemElements = allDivs.filter(div => {
+                        const t = div.innerText || '';
+                        return /RM\s*\d+/i.test(t) && (/x\s*\d+/i.test(t) || /qty/i.test(t)) && t.length < 500;
+                    });
+                }
+
                 const items = [];
 
-                itemElements.forEach(item => {
-                    const nameEl = item.querySelector('.DWVWOJ, [class*="item-name"], [class*="product-name"], [class*="title"], [class*="name"]');
-                    const name = nameEl?.textContent.trim() || '';
-                    if (!name || name === 'NOT FOUND' || name.length < 2) return;
+                itemElements.forEach(itemEl => {
+                    const itemText = itemEl.innerText || '';
 
-                    const quantityText = item.querySelector('.j3I_Nh, [class*="item-quantity"], [class*="quantity"], [class*="count"]')?.textContent.trim() || 'x1';
-                    const quantity = parseInt(quantityText.replace(/[^0-9]/g, '')) || 1;
+                    // Name
+                    const nameEl = itemEl.querySelector('.DWVWOJ, [class*="item-name"], [class*="product-name"], [class*="title"], h3, h4, a');
+                    let name = nameEl?.textContent.trim() || '';
+                    if (!name || name.length < 2 || name.startsWith('RM')) {
+                        // Extract first non-price line of text
+                        const lines = itemText.split('\n').map(l => l.trim()).filter(l => l.length > 2 && !l.startsWith('RM') && !l.startsWith('x'));
+                        name = lines[0] || 'Shopee Item';
+                    }
 
-                    const originalPriceEl = item.querySelector('.q6Gzj5, [class*="original-price"], del, s');
-                    const discountPriceEl = item.querySelector('.PNlXhK, [class*="discount-price"], [class*="special-price"]');
-                    const regularPriceEl = item.querySelector('.nW_6Oi, [class*="price"]');
+                    // Quantity
+                    const qtyMatch = itemText.match(/x\s*(\d+)/i) || itemText.match(/qty\s*:?\s*(\d+)/i) || itemText.match(/\b(\d+)\s*(?:item|pcs|unit)\b/i);
+                    const quantity = qtyMatch ? (parseInt(qtyMatch[1]) || 1) : 1;
 
-                    let origText = originalPriceEl?.textContent.trim() || '';
-                    let discText = discountPriceEl?.textContent.trim() || regularPriceEl?.textContent.trim() || origText;
+                    // Prices
+                    const priceMatches = itemText.match(/RM\s*[\d,.]+/gi) || [];
+                    let origPrice = 0;
+                    let discPrice = 0;
 
-                    const discVal = parseCurrency(discText);
-                    const origVal = origText ? parseCurrency(origText) : discVal;
-                    const itemTotal = discVal * quantity;
+                    if (priceMatches.length >= 2) {
+                        origPrice = parseCurrency(priceMatches[0]);
+                        discPrice = parseCurrency(priceMatches[1]);
+                    } else if (priceMatches.length === 1) {
+                        discPrice = parseCurrency(priceMatches[0]);
+                        origPrice = discPrice;
+                    }
 
-                    items.push({
-                        name: name,
-                        originalPrice: formatCurrency(origVal),
-                        discountPrice: formatCurrency(discVal),
-                        quantity: quantity,
-                        total: itemTotal,
-                        totalPesanan: formatCurrency(itemTotal)
-                    });
+                    if (discPrice > 0) {
+                        const itemTotal = discPrice * quantity;
+                        items.push({
+                            name: name,
+                            originalPrice: formatCurrency(origPrice || discPrice),
+                            discountPrice: formatCurrency(discPrice),
+                            quantity: quantity,
+                            total: itemTotal,
+                            totalPesanan: formatCurrency(itemTotal)
+                        });
+                    }
                 });
+
+                // Fallback: If no structured items found, extract order total from page body
+                if (items.length === 0) {
+                    const bodyText = doc.body.innerText || '';
+                    const totalMatch = bodyText.match(/(?:Order Total|Total Payment|Jumlah Pesanan|Jumlah Pembayaran)[^R\n]*RM\s*([\d,.]+)/i) ||
+                                       bodyText.match(/RM\s*([\d,.]+)/i);
+                    if (totalMatch) {
+                        const totalVal = parseCurrency(totalMatch[1] || totalMatch[0]);
+                        if (totalVal > 0) {
+                            items.push({
+                                name: 'Shopee Order Items',
+                                originalPrice: formatCurrency(totalVal),
+                                discountPrice: formatCurrency(totalVal),
+                                quantity: 1,
+                                total: totalVal,
+                                totalPesanan: formatCurrency(totalVal)
+                            });
+                        }
+                    }
+                }
 
                 try { win.close(); } catch (e) {}
 
@@ -1395,6 +1186,95 @@
         return null;
     }
 
+    async function run() {
+        isParsing = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        updateStatus('🚀 Starting parser...', 'info');
+        currentEntry = 1;
+
+        let urls = getValidOrderUrls();
+
+        if (!urls.length) {
+            extractOrderLinks(true);
+            urls = getValidOrderUrls();
+        }
+
+        if (!urls.length) {
+            if (!window.location.href.includes('/user/purchase')) {
+                showNotification("👉 Please click [🛒 Go to My Purchases] to open your orders page first!", 'error');
+                updateStatus("👉 Please click [🛒 Go to My Purchases] to open your orders page first.", 'warning');
+            } else {
+                showNotification("⚠️ No orders found!\n👉 Click [📜 Auto-Scroll Page] to load your orders.", 'error');
+                updateStatus("⚠️ No order URLs found. Click [📜 Auto-Scroll Page].", 'warning');
+            }
+            resetUI();
+            return;
+        }
+
+        clearResults();
+        const totalUrls = urls.length;
+        let processedUrls = 0;
+
+        for (const url of urls) {
+            if (!isParsing) break;
+
+            processedUrls++;
+            const progressPercent = Math.round((processedUrls / totalUrls) * 100);
+            updateStatus(`Processing order ${processedUrls} of ${totalUrls} (${progressPercent}%)`, 'info');
+
+            const result = await scrapeOrderDetail(url, currentEntry);
+            if (result && isParsing) {
+                addResult(result);
+                currentEntry++;
+
+                if (processedUrls < totalUrls) {
+                    showProgressBar(CONFIG.BETWEEN_DELAY);
+                    await cancellableDelay(CONFIG.BETWEEN_DELAY);
+                    hideProgressBar();
+                }
+            }
+        }
+
+        if (isParsing) {
+            const grandTotal = parsedData.reduce((sum, order) => {
+                return sum + (order.items || []).reduce((itemSum, item) => {
+                    return itemSum + (item.total || 0);
+                }, 0);
+            }, 0);
+
+            const completionMessage = `
+✅ Parsing completed successfully!
+
+📊 Financial Summary:
+• Total Orders: ${parsedData.length}
+• Grand Total Spent: ${formatCurrency(grandTotal)}
+• Average Order Value: ${formatCurrency(grandTotal / (parsedData.length || 1))}
+`;
+
+            updateStatus(completionMessage, 'success');
+            showNotification('✅ Parsing completed successfully!', 'success');
+        } else {
+            updateStatus("🛑 Stopped", 'warning');
+            showNotification('🛑 Parsing stopped by user', 'warning');
+        }
+
+        resetUI();
+    }
+
+    function resetUI() {
+        isParsing = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    }
+
+    function toggleUIVisibility() {
+        isUIHidden = !isUIHidden;
+        parserUI.style.display = isUIHidden ? 'none' : 'block';
+        showNotification(`UI ${isUIHidden ? 'hidden' : 'shown'}`, 'info');
+    }
+
+    // === Table & Filtering ===
     function updateStats() {
         const filteredData = getFilteredData();
         const total = filteredData.reduce((sum, order) => {
@@ -1716,141 +1596,6 @@
         URL.revokeObjectURL(link.href);
     }
 
-    function cancellableDelay(ms) {
-        return new Promise((resolve) => {
-            const checkInterval = setInterval(() => {
-                if (!isParsing && !isAutoScrolling) {
-                    clearInterval(checkInterval);
-                    resolve();
-                }
-            }, 100);
-
-            const timeout = setTimeout(() => {
-                clearInterval(checkInterval);
-                resolve();
-            }, ms);
-        });
-    }
-
-    function waitForPageLoad(win) {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Page load timeout'));
-            }, CONFIG.PAGE_LOAD_TIMEOUT);
-
-            const checkInterval = setInterval(() => {
-                if (!isParsing || !win || win.closed || !win.document) {
-                    clearInterval(checkInterval);
-                    clearTimeout(timeout);
-                    try { win?.close(); } catch (e) {}
-                    reject(new Error('Parsing stopped or window closed'));
-                    return;
-                }
-
-                if (win.document.readyState === 'complete') {
-                    clearInterval(checkInterval);
-                    clearTimeout(timeout);
-                    resolve();
-                }
-            }, 1000);
-        });
-    }
-
-    async function run() {
-        isParsing = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        updateStatus('🚀 Starting parser...', 'info');
-        currentEntry = 1;
-
-        let urls = getValidOrderUrls();
-
-        if (!urls.length) {
-            await extractOrderLinks(true);
-            urls = getValidOrderUrls();
-        }
-
-        if (!urls.length) {
-            try {
-                await fetchOrdersFromShopeeApi();
-                urls = getValidOrderUrls();
-            } catch (e) {}
-        }
-
-        if (!urls.length) {
-            if (!window.location.href.includes('/user/purchase')) {
-                showNotification("👉 Please click [🛒 Go to My Purchases] to open your orders page first!", 'error');
-                updateStatus("👉 Please click [🛒 Go to My Purchases] to open your orders page first.", 'warning');
-            } else {
-                showNotification("⚠️ No orders found!\n👉 Click [⚡ Fetch Orders (API)] or [📜 Auto-Scroll] to load your orders.", 'error');
-                updateStatus("⚠️ No order URLs found. Click [⚡ Fetch Orders (API)] or [📜 Auto-Scroll].", 'warning');
-            }
-            resetUI();
-            return;
-        }
-
-        clearResults();
-        const totalUrls = urls.length;
-        let processedUrls = 0;
-
-        for (const url of urls) {
-            if (!isParsing) break;
-
-            processedUrls++;
-            const progressPercent = Math.round((processedUrls / totalUrls) * 100);
-            updateStatus(`Processing order ${processedUrls} of ${totalUrls} (${progressPercent}%)`, 'info');
-
-            const result = await scrapeOrderDetail(url, currentEntry);
-            if (result && isParsing) {
-                addResult(result);
-                currentEntry++;
-
-                if (processedUrls < totalUrls) {
-                    showProgressBar(CONFIG.BETWEEN_DELAY);
-                    await cancellableDelay(CONFIG.BETWEEN_DELAY);
-                    hideProgressBar();
-                }
-            }
-        }
-
-        if (isParsing) {
-            const grandTotal = parsedData.reduce((sum, order) => {
-                return sum + (order.items || []).reduce((itemSum, item) => {
-                    return itemSum + (item.total || 0);
-                }, 0);
-            }, 0);
-
-            const completionMessage = `
-✅ Parsing completed successfully!
-
-📊 Financial Summary:
-• Total Orders: ${parsedData.length}
-• Grand Total Spent: ${formatCurrency(grandTotal)}
-• Average Order Value: ${formatCurrency(grandTotal / (parsedData.length || 1))}
-`;
-
-            updateStatus(completionMessage, 'success');
-            showNotification('✅ Parsing completed successfully!', 'success');
-        } else {
-            updateStatus("🛑 Stopped", 'warning');
-            showNotification('🛑 Parsing stopped by user', 'warning');
-        }
-
-        resetUI();
-    }
-
-    function resetUI() {
-        isParsing = false;
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-    }
-
-    function toggleUIVisibility() {
-        isUIHidden = !isUIHidden;
-        parserUI.style.display = isUIHidden ? 'none' : 'block';
-        showNotification(`UI ${isUIHidden ? 'hidden' : 'shown'}`, 'info');
-    }
-
     // === Event Listeners ===
     document.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.code === CONFIG.UI_TOGGLE_KEY) {
@@ -1876,7 +1621,6 @@
         }
     });
 
-    apiFetchBtn.addEventListener('click', fetchOrdersFromShopeeApi);
     autoscrollBtn.addEventListener('click', autoScrollAndExtract);
 
     gotoPurchaseBtn.addEventListener('click', () => {
@@ -1929,7 +1673,7 @@
         if (!window.location.href.includes('/user/purchase')) {
             updateStatus("💡 Tip: Click [🛒 Go to My Purchases] to open your orders page.", 'info');
         } else {
-            updateStatus("Ready! Click [⚡ Fetch Orders (API)] or [📜 Auto-Scroll] to load your orders.", 'info');
+            updateStatus("Ready! Click [📜 Auto-Scroll Page] to load your orders.", 'info');
             setTimeout(() => extractOrderLinks(true), 1500);
         }
         showNotification('Shopee MY Financial Tracker ready!', 'success');
@@ -1996,25 +1740,6 @@
 
     function hideProgressBar() {
         if (progressBarContainer) progressBarContainer.style.display = 'none';
-    }
-
-    // Highlight GUIDE if not read before
-    if (guideBtn && !localStorage.getItem('guide_read_my')) {
-        guideBtn.classList.add('guide-highlight');
-        const badge = document.createElement('span');
-        badge.className = 'guide-badge';
-        badge.textContent = 'NEW';
-        guideBtn.style.position = 'relative';
-        guideBtn.appendChild(badge);
-    }
-
-    if (guideBtn) {
-        guideBtn.addEventListener('click', () => {
-            guideBtn.classList.remove('guide-highlight');
-            const badge = guideBtn.querySelector('.guide-badge');
-            if (badge) badge.remove();
-            localStorage.setItem('guide_read_my', '1');
-        });
     }
 
 })();
