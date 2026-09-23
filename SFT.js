@@ -6,10 +6,14 @@
 // @author       9M2PJU (Original by Ryu-Sena & pataanggs)
 // @match        https://shopee.com.my/*
 // @match        https://shopee.co.id/*
+// @icon         https://shopee.com.my/favicon.ico
+// @run-at       document-end
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @connect      shopee.com.my
 // @connect      shopee.co.id
+// @updateURL    https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.user.js
+// @downloadURL  https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.user.js
 // ==/UserScript==
 
 (function () {
@@ -1532,11 +1536,17 @@
     });
 
     // === Initialize ===
-    window.addEventListener('load', () => {
+    function init() {
         updateStatus("Ready", 'info');
         showNotification('Shopee MY Financial Tracker ready!', 'success');
         makeDraggable(parserUI);
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 
     function makeDraggable(element) {
         let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
