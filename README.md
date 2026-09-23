@@ -1,216 +1,192 @@
-# Shopee Financial Tracker
-<img src="images/logo1.png" width="320">
-Formerly know as Shoppe Quick Report
+# Shopee MY Financial Tracker
 
-A powerful browser extension to track and analyze your Shopee purchases with comperhensive financial reporting.
-- [Untuk Panduan dan toturial bahasa indonesia silahkan klik disini](#Shopee-Financial-Tracker)
-## Features
+<p align="center">
+  <img src="images/logo1.png" width="320" alt="Shopee MY Financial Tracker">
+</p>
 
-- 📊 **Comprehensive Financial Tracking**
-  - Track product Original Price and discount
-  - Track Date of order
-  - Track Quantity of item
-  - Calculate Grand Total of order
+<p align="center">
+  <b>A lightweight, powerful browser userscript to track, calculate, and analyze your Shopee Malaysia purchases with comprehensive financial reporting (MYR).</b>
+</p>
 
-
-- 🎨 **Modern UI/UX**
-  - Clean and intuitive interface
-  - Dark/Light mode support
-  - Draggable and resizable window
-  - Real-time status updates
-  - Beautiful notifications
-
-- 📈 **Advanced Export Options**
-  - CSV export with Excel optimization
-  - Markdown export for documentation
-  - Proper currency formatting
-  - Organized data structure
-
-- 🔄 **Smart Features**
-  - Automatic order link extraction
-  - Duplicate detection and removal
-  - Smart retry mechanism
-  - Popup handling
-  - Anti CAPTCHA detection
- 
-## Image
-![UI](images/UI.png)
-![Script in action](images/detail.png)
-![Export](images/export.png)
-
-
-## Installation
-
-1. Install a userscript manager:
-   - [Tampermonkey](https://www.tampermonkey.net/) (Recommended)
-   - [Violentmonkey](https://violentmonkey.github.io/)
-   - [Greasemonkey](https://www.greasespot.net/)
-
-2.  Instalation 
-   -  Instal through [GreasyFork](https://greasyfork.org/en/scripts/540269-shopee-financial-tracker) or
-   -  Github [Release](https://github.com/tukangcode/SFT-ID/releases/tag/v2.0)
-
-## Usage
-
-1. **Enable Popups**
-   - Chrome: 🔐 (Site Info) > Site Settings > Allow Popups
-   - Firefox: ⓘ (Site Info) > Permissions > Allow Popups
-   - Other Userscript supported browser follow smiliar route
-
-2. **Extract Order Links**
-   - Go to "My Orders" page
-   - Go to Selesai Tab ( Finish Tab)
-   - Scroll down as you need to make order part visible
-   - Click [🔗 Extract Order Links] to capture visible order URLs
-
-3. **Remove Duplicates**
-   - Click [🔍 Remove Duplicates] to clean up duplicated links if script fail to remove it
-
-4. **Start Parsing**
-   - Click [▶️ Start] to begin extracting order details
-   - Wait for the process to complete
-   - TIPS : play Music to prevent Device Sleep
-
-5. **Export Results**
-   - [📊 Export CSV] for spreadsheet analysis ( Can be convert to sheet or excel)
-   - [📝 Export Markdown] for documentation and markdown style table
-
-## UI Controls
-
-- Press `Ctrl+M` to toggle UI visibility
-- Click 🌙/☀️ to toggle dark/light mode
-- Drag the header to move the window
-- Resize using the bottom-right corner
-
-## Tips
-
-- Keep the tab active during processing don't move to other tab, Use another windows for activity and let current windows for parsing
-- Solve CAPTCHA manually if prompted (rarely happen)
-- CSV export uses semicolons (;) for better Excel compatibility
-- Dark mode preference is saved between sessions
-
-## Support
-
-For issues, suggestions, or contributions:
-- Create an issue on GitHub
-- Contact the developer directly at reddit (check my github profile)
-
-## Credits
-
-Developed by [Ryu-Sena](https://github.com/tukangcode) | IndoTech Community
-
-## Disclaimer
-This project is not affilated with shoppe.co.id or Shoppe in any way, this Script function to create quick financial reporting only, Shoppe and it logo are trademark and copyright to Shopee Pte. Ltd. All right reserved, Use at own risk Author not responsible for any damage,inaacruacy or lawsuit by using this tool.
-
-## License
-
-This project is licensed under the MIT License -  Go google for it for detail about license
+<p align="center">
+  <a href="#panduan-bahasa-melayu">🇲🇾 Baca Panduan dalam Bahasa Melayu</a> •
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#ui-controls">UI Controls</a>
+</p>
 
 ---
 
-# Shopee Financial Tracker
-## Pelacak Keuangan Shopee
-Sebelumnya dikenal sebagai Shopee Quick Report
-Sebuah ekstensi peramban yang kuat untuk melacak dan menganalisis pembelian Anda di Shopee dengan pelaporan keuangan yang komprehensif.
+## Features
 
-## Fitur
+- 📊 **Comprehensive Financial Tracking (MYR)**
+  - Track Original Price and Discount Price in Malaysian Ringgit (`RM`)
+  - Track Order Date and Time
+  - Track Item Quantity and Name
+  - Automatically calculate Item Subtotals and Grand Total
 
-- 📊 **Pelacakan Keuangan Komprehensif**
-  - Melacak Harga Asli produk dan diskonnya
-  - Melacak Tanggal pemesanan
-  - Melacak Jumlah barang
-  - Menghitung Total Keseluruhan pesanan
+- 🎨 **Modern & Interactive UI/UX**
+  - Clean, responsive floating panel
+  - Dark Mode & Light Mode support
+  - Draggable header and resizable window
+  - Real-time progress bar with delay countdown
+  - Search and multi-column filtering
 
-- 🎨 **UI/UX Modern**
-  - Antarmuka yang bersih dan intuitif
-  - Dukungan mode Gelap/Terang
-  - Jendela dapat dipindahkan dan diubah ukurannya
-  - Pembaruan status secara real-time
-  - Notifikasi yang menarik
+- 📈 **Advanced Export Options**
+  - **CSV Export**: Clean spreadsheet export formatted for Microsoft Excel & Google Sheets (semicolon delimited with proper Ringgit decimals)
+  - **Markdown Export**: Formatted markdown tables for note-taking and documentation
 
-- 📈 **Opsi Ekspor Lanjutan**
-  - Ekspor CSV yang dioptimalkan untuk Excel
-  - Ekspor Markdown untuk dokumentasi
-  - Format mata uang yang sesuai
-  - Struktur data yang terorganisir
+- 🔄 **Smart Automation**
+  - One-click automatic order link extraction from "My Purchases"
+  - Smart duplicate link detection and cleanup
+  - Anti-bot delay rate-limiting to prevent rate limits
+  - Graceful CAPTCHA detection and auto-resume
 
-- 🔄 **Fitur Cerdas**
-  - Ekstraksi tautan pesanan secara otomatis
-  - Deteksi dan penghapusan duplikat
-  - Mekanisme ulang cerdas
-  - Penanganan popup
-  - Deteksi Anti CAPTCHA
+---
 
-## Image
-![UI](images/UI.png)
-![Script in action](images/detail.png)
-![Export](images/export.png)
+## Screenshots
 
+| Main Interface | Order Processing | Export Results |
+|:---:|:---:|:---:|
+| ![UI](images/UI.png) | ![Script in action](images/detail.png) | ![Export](images/export.png) |
 
-## Instalasi
+---
 
-1. Pasang manajer userscript:
-   - [Tampermonkey](https://www.tampermonkey.net/) (Direkomendasikan)
+## Installation
+
+### 1. Install a Userscript Manager
+Choose and install a userscript extension for your web browser:
+- [Tampermonkey](https://www.tampermonkey.net/) (Recommended)
+- [Violentmonkey](https://violentmonkey.github.io/)
+- [Greasemonkey](https://www.greasespot.net/)
+
+### 2. Install the Script
+- **Direct Install:** Click [Install SFT.js](https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.js)
+- Or copy the content of [`SFT.js`](SFT.js) into a new script in your Tampermonkey dashboard.
+
+---
+
+## Usage
+
+1. **Enable Popups for Shopee Malaysia (`shopee.com.my`)**
+   - **Google Chrome / Brave / Edge:** Click the 🔒 / 🎛️ icon beside the URL bar > **Site settings** > Set **Pop-ups and redirects** to **Allow**.
+   - **Mozilla Firefox:** Click ⓘ > **Permissions** > Allow Popups.
+
+2. **Extract Order Links**
+   - Go to Shopee Malaysia: [shopee.com.my/user/purchase](https://shopee.com.my/user/purchase)
+   - Click on the **Completed** tab.
+   - Scroll down to load the orders you want to track.
+   - Click **[🔗 Extract Order Links]** to automatically pull order links into the input box.
+
+3. **Clean Up Duplicates**
+   - Click **[🔍 Remove Duplicates]** to ensure no repeated orders exist in the list.
+
+4. **Start Extraction**
+   - Click **[▶️ Start]** to begin parsing order details.
+   - The script will open and read order pages with safe delays.
+
+5. **Export Your Report**
+   - Click **[📊 Export CSV]** for Excel / Google Sheets.
+   - Click **[📝 Export Markdown]** for Markdown-compatible notes (Notion, Obsidian, GitHub).
+
+---
+
+## UI Controls
+
+- **`Ctrl + M`**: Show / hide the tracker interface at any time.
+- **☀️ / 🌙**: Toggle between Light Mode and Dark Mode.
+- **Header Drag**: Click and drag the header to move the window.
+- **Resize Handle**: Drag the bottom-right corner to resize the window.
+
+---
+
+<a name="panduan-bahasa-melayu"></a>
+# Panduan Bahasa Melayu
+
+## Penjejak Kewangan Shopee Malaysia (SFT-MY)
+
+Skrip pelayar web (userscript) yang pantas dan komprehensif untuk menjejak, mengira dan menganalisis sejarah pembelian anda di **Shopee Malaysia** dalam mata wang Ringgit Malaysia (`RM`).
+
+### Ciri-ciri Utama
+
+- 📊 **Pelaporan Kewangan Lengkap (RM)**
+  - Menjejak Harga Asal dan Harga Diskaun dalam Ringgit Malaysia
+  - Menjejak Tarikh Pesanan dan Masa Pembelian
+  - Mengira Kuantiti Barangan, Jumlah Setiap Item dan Jumlah Keseluruhan (*Grand Total*)
+- 🎨 **Antaramuka Moden & Interaktif**
+  - Sokongan Mod Gelap (*Dark Mode*) & Mod Terang (*Light Mode*)
+  - Tetingkap boleh digerakkan (seret) dan diubah saiz
+  - Bar status kemajuan masa nyata (*real-time*)
+  - Carian pantas dan penapisan data (*filters*)
+- 📈 **Pilihan Eksport Data**
+  - **Eksport CSV**: Dioptimumkan untuk Microsoft Excel dan Google Sheets
+  - **Eksport Markdown**: Format jadual markdown untuk dokumentasi
+- 🔄 **Fungsi Pintar**
+  - Pengekstrakan pautan pesanan secara automatik
+  - Pengesanan dan pembersihan pautan pendua (*duplicates*)
+  - Kawalan jeda pintar untuk mengelakkan sekatan keselamatan Shopee
+
+---
+
+### Cara Pemasangan
+
+1. **Pasang Pengurus Userscript pada Pelayar Anda:**
+   - [Tampermonkey](https://www.tampermonkey.net/) (Disyorkan)
    - [Violentmonkey](https://violentmonkey.github.io/)
    - [Greasemonkey](https://www.greasespot.net/)
 
-2.  Instalation 
-   -  Instal via [GreasyFork](https://greasyfork.org/en/scripts/540269-shopee-financial-tracker) atau
-   -  Github [Release](https://github.com/tukangcode/SFT-ID/releases/tag/v2.0)
+2. **Pasang Skrip SFT-MY:**
+   - Klik [Pasang SFT.js](https://raw.githubusercontent.com/9M2PJU/Shopee-MY-Financial-Tracker/main/SFT.js) atau salin kod dari fail [`SFT.js`](SFT.js) ke dalam Tampermonkey.
 
-## Penggunaan
+---
 
-1. **Aktifkan Popup**
-   - Chrome: 🔐 (Info Situs) > Pengaturan Situs > Izinkan Popup
-   - Firefox: ⓘ (Info Situs) > Izin > Izinkan Popup
-   - Browser lain yang mendukung Userscript ikuti langkah serupa
+### Langkah Penggunaan
 
-2. **Ekstrak Tautan Pesanan**
-   - Buka halaman "Pesanan Saya"
-   - Buka Tab Selesai
-   - Gulir ke bawah sampai bagian pesanan terlihat
-   - Klik [🔗 Ekstrak Tautan Pesanan] untuk mengambil URL pesanan yang terlihat
+1. **Benarkan Tetingkap Timbul (*Popups*):**
+   - Pada laman `shopee.com.my`, buka tetapan kebenaran pelayar web anda dan tetapkan **Pop-ups and redirects** kepada **Benarkan / Allow**.
 
-3. **Hapus Duplikat**
-   - Klik [🔍 Hapus Duplikat] untuk membersihkan tautan ganda jika skrip gagal menghapusnya secara otomatis
+2. **Ekstrak Pautan Pesanan:**
+   - Pergi ke halaman **Pesanan Saya** (*My Purchases*): [shopee.com.my/user/purchase](https://shopee.com.my/user/purchase)
+   - Pilih tab **Selesai** (*Completed*).
+   - Skrol ke bawah sehingga senarai pesanan yang ingin dijejak dimuatkan.
+   - Klik **[🔗 Extract Order Links]** untuk mengekstrak pautan pesanan yang dipaparkan.
 
-4. **Mulai Parsing**
-   - Klik [▶️ Mulai] untuk memulai ekstraksi detail pesanan
-   - Tunggu proses hingga selesai
-   - TIPS: putar musik agar perangkat tidak masuk mode tidur
+3. **Padam Pautan Pendua:**
+   - Klik **[🔍 Remove Duplicates]** untuk membuang pautan yang berulang.
 
-5. **Ekspor Hasil**
-   - [📊 Ekspor CSV] untuk analisis di spreadsheet (bisa dikonversi ke Google Sheet atau Excel)
-   - [📝 Ekspor Markdown] untuk dokumentasi dan tabel bergaya markdown
+4. **Mulakan Proses:**
+   - Klik butang **[▶️ Start]** untuk memulakan penjejakan pesanan.
+   - Skrip akan membaca setiap pesanan secara automatik dengan selang masa yang selamat.
 
-## Kontrol UI
+5. **Eksport Laporan:**
+   - Klik **[📊 Export CSV]** untuk membuka dalam Excel atau Google Sheets.
+   - Klik **[📝 Export Markdown]** untuk salinan teks berformat.
 
-- Tekan `Ctrl+M` untuk menampilkan/sembunyikan UI
-- Klik 🌙/☀️ untuk beralih antara mode gelap/terang
-- Seret bagian header untuk memindahkan jendela
-- Ubah ukuran menggunakan sudut kanan bawah
+---
 
-## Tips
+### Kawalan Antaramuka (UI)
 
-- Biarkan tab tetap aktif selama proses berlangsung, jangan pindah ke tab lain. Gunakan jendela lain untuk aktivitas lain dan biarkan jendela ini untuk parsing.
-- Selesaikan CAPTCHA secara manual jika diminta (jarang terjadi)
-- Ekspor CSV menggunakan tanda titik koma (;) untuk kompatibilitas Excel yang lebih baik
-- Preferensi mode gelap disimpan antar sesi
+- **`Ctrl + M`**: Papar / sembunyikan tetingkap alat pada bila-bila masa.
+- **☀️ / 🌙**: Tukar antara mod gelap dan mod terang.
+- **Seret Pengepala**: Klik dan tahan bahagian atas tetingkap untuk mengalih kedudukan.
+- **Ubah Saiz**: Tarik penjuru kanan bawah untuk membesarkan atau mengecilkan tetingkap.
 
-## Dukungan
+---
 
-Untuk masalah, saran, atau kontribusi:
-- Buat issue di GitHub
-- Hubungi pengembang secara langsung
+## Penafian / Disclaimer
 
-## Penafian
-Proyek ini tidak berafiliasi dengan shopee.co.id maupun Shopee dalam bentuk apa pun. Script ini hanya berfungsi untuk membuat laporan keuangan secara cepat. Shopee dan logonya adalah merek dagang dan hak cipta milik Shopee Pte. Ltd. Seluruh hak dilindungi. Gunakan Dengan Resiko Sendiri ! Pembuat dan Tim tidak Bertangung jawab atas kerusakaan atau kesalahan, ketidaakurataan dan tuntutan hukum dari pengunaan alat ini.
+Projek ini tidak berafiliasi dengan Shopee Mobile Malaysia Sdn. Bhd., Shopee Pte. Ltd., atau mana-mana anak syarikatnya. Skrip ini dibangunkan untuk tujuan pengurusan dan pelaporan kewangan peribadi. Shopee dan logonya adalah tanda dagangan milik Shopee Pte. Ltd. Gunakan atas risiko sendiri.
 
+---
 
-## Kredit
+## Kredit / Credits
 
-Dikembangkan oleh [Ryu-Sena](https://github.com/tukangcode) | Komunitas IndoTech
+- Diadaptasi untuk Shopee Malaysia oleh [9M2PJU](https://github.com/9M2PJU)
+- Projek asal dibangunkan oleh [Ryu-Sena](https://github.com/tukangcode) | Komuniti IndoTech & penambahbaikan UI oleh [pataanggs](https://github.com/pataanggs)
 
-## Lisensi
+---
 
-Proyek ini dilisensikan di bawah Lisensi MIT – Cari di Google untuk detail lengkap tentang lisensi ini
+## Lesen / License
+
+Dilesenkan di bawah [Lesen MIT](LICENSE).

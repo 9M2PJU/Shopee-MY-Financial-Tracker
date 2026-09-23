@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         Shopee Financial Tracker
+// @name         Shopee MY Financial Tracker
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Track and analyze your Shopee purchases with Comperhensive financial reporting
-// @author       Ryu-Sena (IndoTech Community) improvement Ui by pataanggs
+// @version      2.1
+// @description  Track and analyze your Shopee Malaysia purchases with comprehensive financial reporting (MYR)
+// @author       9M2PJU (Original by Ryu-Sena & pataanggs)
+// @match        https://shopee.com.my/*
 // @match        https://shopee.co.id/*
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
+// @connect      shopee.com.my
 // @connect      shopee.co.id
 // ==/UserScript==
 
@@ -37,7 +39,6 @@
     let isParsing = false;
     let currentEntry = 1;
     let parsedData = [];
-    let extractedUrls = new Set();
     let isUIHidden = false;
     let isDarkMode = localStorage.getItem(CONFIG.THEME_KEY) === 'dark';
     let currentSort = {
@@ -77,14 +78,13 @@
     max-width: 1400px;
     max-height: 90vh;
     overflow-y: auto;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: var(--text-primary);
     display: ${isUIHidden ? 'none' : 'block'};
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
     border: 1px solid var(--border-color);
     resize: both;
-    cursor: move;
 }
 
 .parser-container {
@@ -171,6 +171,7 @@
     background: var(--bg-primary);
     color: var(--text-primary);
     transition: all 0.2s ease;
+    box-sizing: border-box;
 }
 
 .parser-textarea:focus {
@@ -203,6 +204,12 @@
     transform: translateY(0);
 }
 
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .btn-green { background: var(--success-color); color: white; }
 .btn-red { background: var(--error-color); color: white; }
 .btn-blue { background: #3b82f6; color: white; }
@@ -220,6 +227,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    white-space: pre-line;
 }
 
 .credit {
@@ -241,7 +249,8 @@
     border-radius: 16px;
     box-shadow: 0 8px 24px var(--shadow-color);
     padding: 24px;
-    max-width: 80%;
+    width: 90%;
+    max-width: 700px;
     max-height: 80vh;
     overflow-y: auto;
     display: none;
@@ -270,6 +279,13 @@
     font-size: 0.875rem;
     color: var(--text-secondary);
     line-height: 1.6;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
 }
 
 .modal-close {
@@ -390,7 +406,8 @@
 .filter-controls {
     display: flex;
     gap: 8px;
-    margin-bottom: 16px;
+    margin-top: 16px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
 }
 
@@ -493,18 +510,18 @@
 }
 
 .sortable::after {
-    content: '↕';
+    content: ' ↕';
     margin-left: 4px;
     opacity: 0.5;
 }
 
 .sortable.asc::after {
-    content: '↑';
+    content: ' ↑';
     opacity: 1;
 }
 
 .sortable.desc::after {
-    content: '↓';
+    content: ' ↓';
     opacity: 1;
 }
 
@@ -544,11 +561,13 @@
     animation: pulse-guide 1.2s infinite;
     position: relative;
 }
+
 @keyframes pulse-guide {
     0% { box-shadow: 0 0 12px 2px #f59e0b66; }
     50% { box-shadow: 0 0 24px 6px #f59e0b99; }
     100% { box-shadow: 0 0 12px 2px #f59e0b66; }
 }
+
 .guide-badge {
     position: absolute;
     top: -10px;
@@ -572,7 +591,7 @@
             <div class="parser-container">
                 <div class="parser-header">
                     <div class="parser-title">
-                        <span>📊 Shopee Financial Tracker v13.1</span>
+                        <span>📊 Shopee MY Financial Tracker v2.1</span>
                     </div>
                     <div class="header-controls">
                         <button class="btn btn-gray" id="guide-btn">📘 Guide</button>
@@ -580,7 +599,7 @@
                     </div>
                 </div>
                 <div class="resize-handle"></div>
-                <textarea id="url-input" placeholder="Paste 1-3 order links (one per line)" class="parser-textarea"></textarea>
+                <textarea id="url-input" placeholder="Paste Shopee order links here (one per line) or click 'Extract Order Links'" class="parser-textarea"></textarea>
                 <div class="parser-controls">
                     <button class="btn btn-green" id="start-btn">▶️ Start</button>
                     <button class="btn btn-red" id="stop-btn" disabled>⏹️ Stop</button>
@@ -591,9 +610,46 @@
                     <button class="btn btn-gray" id="extract-btn">🔗 Extract Order Links</button>
                 </div>
                 <div class="parser-status" id="status">Ready</div>
-                <div id="progress-bar-container" style="width: 100%; margin: 12px 0; display: none;">
-                    <div id="progress-bar" style="height: 16px; width: 0; background: var(--accent-color); border-radius: 8px; transition: width 0.2s;"></div>
-                    <div id="progress-bar-label" style="position: absolute; left: 50%; top: 0; transform: translateX(-50%); color: var(--text-primary); font-size: 0.85rem; font-weight: 500;"></div>
+                <div id="progress-bar-container" style="width: 100%; margin: 12px 0; display: none; position: relative; background: var(--bg-secondary); border-radius: 8px; overflow: hidden; height: 18px;">
+                    <div id="progress-bar" style="height: 100%; width: 0; background: var(--accent-color); border-radius: 8px; transition: width 0.2s;"></div>
+                    <div id="progress-bar-label" style="position: absolute; width: 100%; text-align: center; top: 0; line-height: 18px; color: var(--text-primary); font-size: 0.75rem; font-weight: 500;"></div>
+                </div>
+                <div class="filter-controls">
+                    <input type="text" class="search-box" id="search-input" placeholder="Search orders, shops, items...">
+                    <div class="filter-group">
+                        <select class="filter-select" id="filter-column">
+                            <option value="Shop">Shop</option>
+                            <option value="Order Date">Order Date</option>
+                            <option value="Item">Item</option>
+                            <option value="Original Price">Original Price</option>
+                            <option value="Discount Price">Discount Price</option>
+                            <option value="Quantity">Quantity</option>
+                            <option value="Total">Total</option>
+                        </select>
+                        <select class="filter-select" id="filter-type">
+                            <option value="contains">Contains</option>
+                            <option value="equals">Equals</option>
+                            <option value="greater_than">Greater Than</option>
+                            <option value="less_than">Less Than</option>
+                        </select>
+                        <input type="text" class="filter-input" id="filter-value" placeholder="Value...">
+                        <button class="filter-btn" id="add-filter-btn">Add Filter</button>
+                    </div>
+                </div>
+                <div class="filter-tags" id="filter-tags"></div>
+                <div class="stats-panel" id="stats-panel">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Orders</div>
+                        <div class="stat-value" id="total-orders">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Spent</div>
+                        <div class="stat-value" id="total-spent">RM 0.00</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Average Order Value</div>
+                        <div class="stat-value" id="avg-order">RM 0.00</div>
+                    </div>
                 </div>
                 <table class="parser-table" id="results-table">
                     <thead>
@@ -602,61 +658,56 @@
                             <th class="sortable" data-column="Shop">Shop</th>
                             <th class="sortable" data-column="Order Date">Order Date</th>
                             <th class="sortable" data-column="Item">Item</th>
-                            <th class="sortable" data-column="Harga Asli">Harga Asli</th>
-                            <th class="sortable" data-column="Harga Discount">Harga Discount</th>
+                            <th class="sortable" data-column="Original Price">Original Price</th>
+                            <th class="sortable" data-column="Discount Price">Discount Price</th>
                             <th class="sortable" data-column="Quantity">Quantity</th>
-                            <th class="sortable" data-column="Total Pesanan">Total Pesanan</th>
+                            <th class="sortable" data-column="Total">Total</th>
                             <th>URL</th>
                         </tr>
                     </thead>
                     <tbody id="results-body"></tbody>
                 </table>
                 <div id="grand-total-container" style="margin-top: 20px; text-align: right;">
-                    <span style="font-size: 1.25rem; font-weight: bold; color: var(--accent-color);">Grand Total: <span id="grand-total-value">Rp 0</span></span>
+                    <span style="font-size: 1.25rem; font-weight: bold; color: var(--accent-color);">Grand Total: <span id="grand-total-value">RM 0.00</span></span>
                 </div>
-                <div class="credit">Developed by <a href="https://github.com/tukangcode" target="_blank" style="color: #3b82f6; text-decoration: underline;">Ryu-Sena</a> | IndoTech Community</div>
+                <div class="credit">Shopee MY Financial Tracker | Adapted by <a href="https://github.com/9M2PJU" target="_blank" style="color: #3b82f6; text-decoration: underline;">9M2PJU</a> | Original by <a href="https://github.com/tukangcode" target="_blank" style="color: #3b82f6; text-decoration: underline;">Ryu-Sena</a></div>
             </div>
             <div class="guide-modal" id="guide-modal">
                 <div class="modal-header">
-                    <div class="modal-title">📘 User Guide</div>
+                    <div class="modal-title">📘 User Guide / Panduan Pengguna</div>
                     <button class="modal-close" id="modal-close">✕</button>
                 </div>
-                <div class="modal-content">📘 How to Use:
-1. Enable Popups for Shopee:
-   - Chrome: 🔐 (Site Info) > Site Settings > Allow Popups
+                <div class="modal-content">📘 How to Use (Shopee Malaysia):
+
+1. Enable Popups for Shopee Malaysia (shopee.com.my):
+   - Chrome / Brave / Edge: 🔐 (Site Info) > Site Settings > Allow Popups & Redirects
    - Firefox: ⓘ (Site Info) > Permissions > Allow Popups
 
 2. Extract Order Links:
-   - Go to "My Orders" page.
-   - Click [🔗 Extract Order Links] to capture visible order URLs.
+   - Go to "My Purchases" (Pesanan Saya) page on shopee.com.my.
+   - Click on the "Completed" (Selesai) tab.
+   - Scroll down to load order items on the screen.
+   - Click [🔗 Extract Order Links] to capture visible order URLs into the box.
 
-3. Ensure No Duplicate Links:
-   - Click [🔍 Remove Duplicates] to clean up duplicated links.
+3. Clean Duplicate Links:
+   - Click [🔍 Remove Duplicates] to remove any duplicate order links.
 
 4. Start Parsing:
-   - Click [▶️ Start] to begin extracting order details.
-   - Wait patiently; progress will appear in the status.
+   - Click [▶️ Start] to begin extracting order details in Malaysian Ringgit (MYR).
+   - The script will automatically open and parse order pages safely with rate-limiting.
 
 5. If CAPTCHA Appears:
-   - Script will pause for 60 seconds to let you solve CAPTCHA manually.
-   - After solving, let tab for 10 seconds and script will continue last progress.
-   - Parsing will automatically resume.
+   - The script pauses automatically for you to solve the CAPTCHA manually.
+   - Once solved, the script resumes processing.
 
 6. Export Results:
-   - After parsing, export the result via:
-     - [📊 Export CSV] for spreadsheet (Excel, etc).
-     - [📝 Export Markdown] for clean text format.
+   - [📊 Export CSV]: Optimized for Microsoft Excel / Google Sheets with proper currency format.
+   - [📝 Export Markdown]: Formatted Markdown table for documentation and note-taking.
 
 7. UI Controls:
-   - Press Ctrl+M anytime to toggle the UI visibility.
-   - Click 🌙/☀️ to toggle dark/light mode.
-
-ℹ️ Notes:
-- Avoid opening more than 3 order links manually to prevent Shopee detection.
-- Parsing 200+ orders usually does NOT trigger CAPTCHA but stay alert just in case.
-- CSV export uses semicolons (;) for better Excel compatibility.
-- Dark mode preference is saved between sessions.
-- All prices are formatted with proper currency symbols.
+   - Press Ctrl+M anytime to toggle UI visibility.
+   - Click 🌙 / ☀️ to toggle dark/light mode.
+   - Drag header to reposition or drag corner to resize.
                 </div>
                 <div class="modal-footer">
                     <button class="modal-close" id="modal-ok">OK</button>
@@ -665,43 +716,6 @@
         </div>
         <div class="theme-toggle" id="theme-toggle">${isDarkMode ? '☀️' : '🌙'}</div>
         <div class="notification" id="notification"></div>
-        <div class="filter-controls">
-            <input type="text" class="search-box" id="search-input" placeholder="Search orders...">
-            <div class="filter-group">
-                <select class="filter-select" id="filter-column">
-                    <option value="Shop">Shop</option>
-                    <option value="Order Date">Order Date</option>
-                    <option value="Item">Item</option>
-                    <option value="Harga Asli">Harga Asli</option>
-                    <option value="Harga Discount">Harga Discount</option>
-                    <option value="Quantity">Quantity</option>
-                    <option value="Total Pesanan">Total Pesanan</option>
-                </select>
-                <select class="filter-select" id="filter-type">
-                    <option value="contains">Contains</option>
-                    <option value="equals">Equals</option>
-                    <option value="greater_than">Greater Than</option>
-                    <option value="less_than">Less Than</option>
-                </select>
-                <input type="text" class="filter-input" id="filter-value" placeholder="Value...">
-                <button class="filter-btn" id="add-filter-btn">Add Filter</button>
-            </div>
-        </div>
-        <div class="filter-tags" id="filter-tags"></div>
-        <div class="stats-panel" id="stats-panel">
-            <div class="stat-item">
-                <div class="stat-label">Total Orders</div>
-                <div class="stat-value" id="total-orders">0</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Total Spent</div>
-                <div class="stat-value" id="total-spent">Rp 0</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Average Order Value</div>
-                <div class="stat-value" id="avg-order">Rp 0</div>
-            </div>
-        </div>
     `;
 
     const div = document.createElement('div');
@@ -733,7 +747,6 @@
     const filterValue = document.getElementById('filter-value');
     const addFilterBtn = document.getElementById('add-filter-btn');
     const filterTags = document.getElementById('filter-tags');
-    const statsPanel = document.getElementById('stats-panel');
     const totalOrders = document.getElementById('total-orders');
     const totalSpent = document.getElementById('total-spent');
     const avgOrder = document.getElementById('avg-order');
@@ -743,6 +756,16 @@
     const progressBarLabel = document.getElementById('progress-bar-label');
 
     // === Helper Functions ===
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     function showNotification(message, type = 'info') {
         notification.textContent = message;
         notification.className = `notification ${type}`;
@@ -795,6 +818,9 @@
             if (orderNumber && !seen.has(orderNumber)) {
                 seen.add(orderNumber);
                 uniqueUrls.push(url);
+            } else if (!orderNumber && url && !seen.has(url)) {
+                seen.add(url);
+                uniqueUrls.push(url);
             }
         }
 
@@ -808,8 +834,13 @@
     }
 
     function extractOrderLinks() {
-        const links = Array.from(document.querySelectorAll('a[href^="/user/purchase/order/"]'))
-            .map(a => `https://shopee.co.id${a.getAttribute('href')}`);
+        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
+        const links = Array.from(document.querySelectorAll('a[href*="/user/purchase/order/"]'))
+            .map(a => {
+                const href = a.getAttribute('href');
+                if (href.startsWith('http')) return href;
+                return `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+            });
 
         const seen = new Set();
         const uniqueLinks = [];
@@ -828,39 +859,70 @@
                 .map(u => u.trim())
                 .filter(Boolean);
 
-            urlInput.value = [...existingUrls, ...uniqueLinks].join('\n');
-            showNotification(`✅ Found ${uniqueLinks.length} new order links`, 'success');
+            const allUrlsSet = new Set(existingUrls);
+            let addedCount = 0;
+            uniqueLinks.forEach(u => {
+                if (!allUrlsSet.has(u)) {
+                    existingUrls.push(u);
+                    addedCount++;
+                }
+            });
+
+            urlInput.value = existingUrls.join('\n');
+            showNotification(`✅ Found ${addedCount} new order link(s)`, 'success');
         } else {
-            showNotification('⚠️ No new order links found', 'warning');
+            showNotification('⚠️ No order links found on current screen. Please scroll down.', 'warning');
         }
     }
 
     function formatCurrency(amount) {
-        return new Intl.NumberFormat('id-ID', {
+        return new Intl.NumberFormat('en-MY', {
             style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(amount);
+            currency: 'MYR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount || 0);
     }
 
     function parseCurrency(amount) {
-        if (typeof amount === 'number') return amount;
+        if (typeof amount === 'number') return isNaN(amount) ? 0 : amount;
+        if (!amount) return 0;
 
-        // Handle Indonesian currency formatting (Rp26.400 → 26400)
-        const cleaned = amount
-            .replace(/[^\d,.-]/g, '')  // Remove non-numeric except ,.-
-            .replace(/\./g, '')         // Remove thousands separators
-            .replace(/,/g, '.')         // Convert decimal comma to dot
-            .replace(/[^0-9.-]/g, '');  // Remove any remaining non-numeric
+        let str = amount.toString().replace(/RM|Rp/gi, '').trim();
+        str = str.replace(/[^\d,.-]/g, '');
+        if (!str) return 0;
 
-        return parseFloat(cleaned) || 0;
+        // In Shopee MY (MYR), standard format is 1,234.50 (comma thousands, dot decimals)
+        if (str.includes(',') && str.includes('.')) {
+            if (str.indexOf(',') < str.indexOf('.')) {
+                // MYR/USD format 1,234.56
+                str = str.replace(/,/g, '');
+            } else {
+                // Indonesian format 1.234,56
+                str = str.replace(/\./g, '').replace(/,/g, '.');
+            }
+        } else if (str.includes(',')) {
+            const parts = str.split(',');
+            if (parts.length === 2 && parts[1].length === 2) {
+                str = str.replace(',', '.');
+            } else {
+                str = str.replace(/,/g, '');
+            }
+        } else if (str.includes('.')) {
+            const parts = str.split('.');
+            if (parts.length > 2) {
+                str = str.replace(/\./g, '');
+            }
+        }
+
+        const val = parseFloat(str);
+        return isNaN(val) ? 0 : val;
     }
 
     function updateStats() {
         const filteredData = getFilteredData();
         const total = filteredData.reduce((sum, order) => {
-            return sum + order.items.reduce((itemSum, item) => {
+            return sum + (order.items || []).reduce((itemSum, item) => {
                 return itemSum + (item.total || 0);
             }, 0);
         }, 0);
@@ -874,7 +936,7 @@
     function updateGrandTotal() {
         const filteredData = getFilteredData();
         const grandTotal = filteredData.reduce((sum, order) => {
-            return sum + order.items.reduce((itemSum, item) => {
+            return sum + (order.items || []).reduce((itemSum, item) => {
                 return itemSum + (item.total || 0);
             }, 0);
         }, 0);
@@ -890,22 +952,33 @@
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             filtered = filtered.filter(order => {
-                return order.Shop.toLowerCase().includes(query) ||
-                       order['Order Date'].toLowerCase().includes(query) ||
-                       order.items.some(item => item.name.toLowerCase().includes(query) ||
-                       (item.hargaAsli && item.hargaAsli.toLowerCase().includes(query)) ||
-                       (item.hargaDiscount && item.hargaDiscount.toLowerCase().includes(query)) ||
-                       (item.quantity && item.quantity.toString().includes(query)) ||
-                       (item.totalPesanan && item.totalPesanan.toLowerCase().includes(query)));
+                return (order.Shop && order.Shop.toLowerCase().includes(query)) ||
+                       (order['Order Date'] && order['Order Date'].toLowerCase().includes(query)) ||
+                       (order.items && order.items.some(item =>
+                           (item.name && item.name.toLowerCase().includes(query)) ||
+                           (item.originalPrice && item.originalPrice.toLowerCase().includes(query)) ||
+                           (item.discountPrice && item.discountPrice.toLowerCase().includes(query)) ||
+                           (item.quantity && item.quantity.toString().includes(query)) ||
+                           (item.totalPesanan && item.totalPesanan.toLowerCase().includes(query))
+                       ));
             });
         }
 
         // Apply filters
         currentFilters.forEach(filter => {
             filtered = filtered.filter(order => {
-                return order.items.some(item => {
-                    const value = item[filter.column] || order[filter.column];
-                    if (!value) return false;
+                return (order.items || []).some(item => {
+                    let value = '';
+                    if (filter.column === 'Shop') value = order.Shop;
+                    else if (filter.column === 'Order Date') value = order['Order Date'];
+                    else if (filter.column === 'Item') value = item.name;
+                    else if (filter.column === 'Original Price') value = item.originalPrice;
+                    else if (filter.column === 'Discount Price') value = item.discountPrice;
+                    else if (filter.column === 'Quantity') value = item.quantity;
+                    else if (filter.column === 'Total') value = item.totalPesanan;
+                    else value = item[filter.column] || order[filter.column];
+
+                    if (value === undefined || value === null) return false;
 
                     switch (filter.type) {
                         case CONFIG.FILTER_TYPES.CONTAINS:
@@ -926,10 +999,35 @@
         // Apply sorting
         if (currentSort.column) {
             filtered.sort((a, b) => {
-                const aValue = a.items[0]?.[currentSort.column] || a[currentSort.column];
-                const bValue = b.items[0]?.[currentSort.column] || b[currentSort.column];
+                let aValue = '';
+                let bValue = '';
+                if (currentSort.column === 'Entry') {
+                    aValue = a.Entry;
+                    bValue = b.Entry;
+                } else if (currentSort.column === 'Shop') {
+                    aValue = a.Shop || '';
+                    bValue = b.Shop || '';
+                } else if (currentSort.column === 'Order Date') {
+                    aValue = a['Order Date'] || '';
+                    bValue = b['Order Date'] || '';
+                } else if (currentSort.column === 'Item') {
+                    aValue = a.items[0]?.name || '';
+                    bValue = b.items[0]?.name || '';
+                } else if (currentSort.column === 'Original Price') {
+                    aValue = a.items[0]?.originalPrice || 0;
+                    bValue = b.items[0]?.originalPrice || 0;
+                } else if (currentSort.column === 'Discount Price') {
+                    aValue = a.items[0]?.discountPrice || 0;
+                    bValue = b.items[0]?.discountPrice || 0;
+                } else if (currentSort.column === 'Quantity') {
+                    aValue = a.items[0]?.quantity || 0;
+                    bValue = b.items[0]?.quantity || 0;
+                } else if (currentSort.column === 'Total') {
+                    aValue = a.items[0]?.total || 0;
+                    bValue = b.items[0]?.total || 0;
+                }
 
-                if (typeof aValue === 'number' || typeof bValue === 'number') {
+                if (['Entry', 'Quantity', 'Original Price', 'Discount Price', 'Total'].includes(currentSort.column)) {
                     const aNum = parseCurrency(aValue);
                     const bNum = parseCurrency(bValue);
                     return currentSort.direction === CONFIG.SORT_DIRECTIONS.ASC ? aNum - bNum : bNum - aNum;
@@ -948,18 +1046,18 @@
         resultsBody.innerHTML = '';
 
         filteredData.forEach(order => {
-            order.items.forEach(item => {
+            (order.items || []).forEach(item => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${order.Entry}</td>
-                    <td>${order.Shop}</td>
-                    <td>${order['Order Date']}</td>
-                    <td>${item.name}</td>
-                    <td class="price">${item.hargaAsli || '-'}</td>
-                    <td class="price">${item.hargaDiscount || '-'}</td>
+                    <td>${escapeHtml(order.Shop)}</td>
+                    <td>${escapeHtml(order['Order Date'])}</td>
+                    <td>${escapeHtml(item.name)}</td>
+                    <td class="price">${escapeHtml(item.originalPrice || '-')}</td>
+                    <td class="price">${escapeHtml(item.discountPrice || '-')}</td>
                     <td>${item.quantity || '-'}</td>
-                    <td class="price total">${item.totalPesanan || '-'}</td>
-                    <td><a href="${order.URL}" target="_blank">${order.URL}</a></td>
+                    <td class="price total">${escapeHtml(item.totalPesanan || '-')}</td>
+                    <td><a href="${escapeHtml(order.URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(order.URL)}</a></td>
                 `;
                 resultsBody.appendChild(row);
             });
@@ -974,9 +1072,10 @@
             const tag = document.createElement('div');
             tag.className = 'filter-tag';
             tag.innerHTML = `
-                ${filter.column} ${filter.type} ${filter.value}
-                <button onclick="removeFilter(${index})">×</button>
+                ${escapeHtml(filter.column)} ${escapeHtml(filter.type)} "${escapeHtml(filter.value)}"
+                <button type="button" data-index="${index}">×</button>
             `;
+            tag.querySelector('button').addEventListener('click', () => removeFilter(index));
             filterTags.appendChild(tag);
         });
     }
@@ -984,7 +1083,7 @@
     function addFilter() {
         const column = filterColumn.value;
         const type = filterType.value;
-        const value = filterValue.value;
+        const value = filterValue.value.trim();
 
         if (!value) {
             showNotification('⚠️ Please enter a filter value', 'warning');
@@ -1013,7 +1112,6 @@
             currentSort.direction = CONFIG.SORT_DIRECTIONS.ASC;
         }
 
-        // Update sort indicators
         document.querySelectorAll('.sortable').forEach(th => {
             th.classList.remove('asc', 'desc');
             if (th.dataset.column === column) {
@@ -1025,20 +1123,20 @@
     }
 
     function addResult(result) {
-        if (!result || !result.items.length) return;
+        if (!result || !result.items || !result.items.length) return;
         parsedData.push(result);
         result.items.forEach(item => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${result.Entry}</td>
-                <td>${result.Shop}</td>
-                <td>${result['Order Date']}</td>
-                <td>${item.name}</td>
-                <td class="price">${item.hargaAsli || '-'}</td>
-                <td class="price">${item.hargaDiscount || '-'}</td>
+                <td>${escapeHtml(result.Shop)}</td>
+                <td>${escapeHtml(result['Order Date'])}</td>
+                <td>${escapeHtml(item.name)}</td>
+                <td class="price">${escapeHtml(item.originalPrice || '-')}</td>
+                <td class="price">${escapeHtml(item.discountPrice || '-')}</td>
                 <td>${item.quantity || '-'}</td>
-                <td class="price total">${item.totalPesanan || '-'}</td>
-                <td><a href="${result.URL}" target="_blank">${result.URL}</a></td>
+                <td class="price total">${escapeHtml(item.totalPesanan || '-')}</td>
+                <td><a href="${escapeHtml(result.URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(result.URL)}</a></td>
             `;
             resultsBody.appendChild(row);
         });
@@ -1074,60 +1172,66 @@
     }
 
     function exportToCSV(data) {
-        const headers = ['Entry','Shop','Order Date','Item','Harga Asli','Harga Discount','Quantity','Total Pesanan','URL'];
+        const headers = ['Entry', 'Shop', 'Order Date', 'Item', 'Original Price (MYR)', 'Discount Price (MYR)', 'Quantity', 'Total (MYR)', 'URL'];
         let csv = headers.join(CONFIG.CSV_DELIMITER) + '\n';
         let grandTotal = 0;
         data.forEach(order => {
-            order.items.forEach(item => {
-                // Format numbers properly for CSV
-                const hargaAsliFormatted = item.hargaAsli ? parseCurrency(item.hargaAsli) : '';
-                const hargaDiscountFormatted = item.hargaDiscount ? parseCurrency(item.hargaDiscount) : '';
-                const totalPesananFormatted = item.total || 0;
+            (order.items || []).forEach(item => {
+                const originalPriceFormatted = item.originalPrice ? parseCurrency(item.originalPrice).toFixed(2) : '';
+                const discountPriceFormatted = item.discountPrice ? parseCurrency(item.discountPrice).toFixed(2) : '';
+                const totalPesananFormatted = (item.total || 0).toFixed(2);
 
-                grandTotal += totalPesananFormatted;
+                grandTotal += item.total || 0;
 
                 csv += [
                     order.Entry,
-                    `"${order.Shop.replace(/"/g, '""')}"`,
-                    `"${order['Order Date']}"`,
-                    `"${item.name.replace(/"/g, '""')}"`,
-                    hargaAsliFormatted,
-                    hargaDiscountFormatted,
+                    `"${(order.Shop || '').replace(/"/g, '""')}"`,
+                    `"${(order['Order Date'] || '').replace(/"/g, '""')}"`,
+                    `"${(item.name || '').replace(/"/g, '""')}"`,
+                    originalPriceFormatted,
+                    discountPriceFormatted,
                     item.quantity || '1',
                     totalPesananFormatted,
                     `"${order.URL}"`
                 ].join(CONFIG.CSV_DELIMITER) + '\n';
             });
         });
-        // Add a summary row for Grand Total (formatted correctly)
+
+        // Summary row for Grand Total
         csv += [
-            '', '', '', '', '', '', 'Grand Total', grandTotal, ''
+            '', '', '', '', '', '', 'Grand Total', grandTotal.toFixed(2), ''
         ].join(CONFIG.CSV_DELIMITER) + '\n';
-        downloadFile(csv, 'shopee_orders.csv');
+
+        downloadFile(csv, 'shopee_my_orders.csv');
         showNotification('✅ CSV exported successfully!', 'success');
     }
 
     function exportToMarkdown(data) {
-        const headers = ['Entry','Shop','Order Date','Item','Harga Asli','Harga Discount','Quantity','Total Pesanan','URL'];
-        let md = '# Shopee Orders\n';
+        const headers = ['Entry', 'Shop', 'Order Date', 'Item', 'Original Price', 'Discount Price', 'Quantity', 'Total', 'URL'];
+        let md = '# Shopee Malaysia Orders Report\n\n';
         md += headers.map(h => `**${h}**`).join(' | ') + '\n';
         md += headers.map(() => '---').join(' | ') + '\n';
+        let grandTotal = 0;
+
         data.forEach(order => {
-            order.items.forEach(item => {
+            (order.items || []).forEach(item => {
+                grandTotal += item.total || 0;
                 md += [
                     order.Entry,
-                    order.Shop,
-                    order['Order Date'],
-                    item.name,
-                    item.hargaAsli || '-',
-                    item.hargaDiscount || '-',
+                    (order.Shop || '').replace(/\|/g, '\\|'),
+                    (order['Order Date'] || '').replace(/\|/g, '\\|'),
+                    (item.name || '').replace(/\|/g, '\\|'),
+                    item.originalPrice || '-',
+                    item.discountPrice || '-',
                     item.quantity || '1',
                     item.totalPesanan || '-',
                     `[Link](${order.URL})`
                 ].join(' | ') + '\n';
             });
         });
-        downloadFile(md, 'shopee_orders.md');
+
+        md += `\n**Grand Total:** ${formatCurrency(grandTotal)}\n`;
+        downloadFile(md, 'shopee_my_orders.md');
         showNotification('✅ Markdown exported successfully!', 'success');
     }
 
@@ -1163,10 +1267,10 @@
             }, CONFIG.PAGE_LOAD_TIMEOUT);
 
             const checkInterval = setInterval(() => {
-                if (!isParsing || !win || !win.document) {
+                if (!isParsing || !win || win.closed || !win.document) {
                     clearInterval(checkInterval);
                     clearTimeout(timeout);
-                    win?.close();
+                    try { win?.close(); } catch (e) {}
                     reject(new Error('Parsing stopped or window closed'));
                     return;
                 }
@@ -1185,7 +1289,7 @@
         while (retryCount <= CONFIG.MAX_RETRIES && isParsing) {
             const win = window.open(url, '_blank');
             if (!win) {
-                showNotification("❌ Popup blocked - Enable popups in browser settings", 'error');
+                showNotification("❌ Popup blocked - Please allow popups for Shopee in browser settings", 'error');
                 return null;
             }
 
@@ -1199,61 +1303,61 @@
                 await cancellableDelay(5000);
                 const doc = win.document;
 
-                // Get shop name and order date
-                const shopName = doc.querySelector('.UDaMW3')?.textContent.trim() || 'NOT FOUND';
-                const orderDate = doc.querySelector('.stepper__step-date')?.textContent.trim() || 'NOT FOUND';
+                // Shop Name
+                const shopEl = doc.querySelector('.UDaMW3, .order-detail__header-shop-name, a[href*="/shop/"], [class*="shop-name"]');
+                const shopName = shopEl?.textContent.trim() || 'NOT FOUND';
 
-                const itemElements = doc.querySelectorAll('a.mZ1OWk');
+                // Order Date
+                const dateEl = doc.querySelector('.stepper__step-date, .order-detail__date, [class*="step-date"], [class*="order-date"]');
+                const orderDate = dateEl?.textContent.trim() || 'NOT FOUND';
+
+                // Items
+                let itemElements = doc.querySelectorAll('a.mZ1OWk, div.mZ1OWk, .order-detail-product, [class*="order-item__wrapper"]');
+                if (!itemElements.length) {
+                    itemElements = doc.querySelectorAll('[class*="item-row"], [class*="order-item"]');
+                }
+
                 const items = [];
 
                 itemElements.forEach(item => {
-                    const name = item.querySelector('.DWVWOJ')?.textContent.trim() || 'NOT FOUND';
-                    const quantityText = item.querySelector('.j3I_Nh')?.textContent.trim() || 'x1';
-                    const quantity = parseInt(quantityText.replace('x', '')) || 1;
+                    const nameEl = item.querySelector('.DWVWOJ, [class*="item-name"], [class*="order-content__item-name"]');
+                    const name = nameEl?.textContent.trim() || '';
+                    if (!name || name === 'NOT FOUND') return;
 
-                    // Extract prices
-                    let hargaAsli = '';
-                    let hargaDiscount = '';
+                    const quantityText = item.querySelector('.j3I_Nh, [class*="item-quantity"], [class*="quantity"]')?.textContent.trim() || 'x1';
+                    const quantity = parseInt(quantityText.replace(/[^0-9]/g, '')) || 1;
 
-                    // First check for discount scenario (both original and discount prices exist)
-                    const originalPriceEl = item.querySelector('.q6Gzj5'); // Original price class
-                    const discountPriceEl = item.querySelector('.PNlXhK'); // Discount price class
+                    // Prices
+                    let originalPriceText = '';
+                    let discountPriceText = '';
+
+                    const originalPriceEl = item.querySelector('.q6Gzj5, [class*="original-price"], del, s');
+                    const discountPriceEl = item.querySelector('.PNlXhK, [class*="discount-price"]');
+                    const regularPriceEl = item.querySelector('.nW_6Oi, [class*="price"]');
 
                     if (originalPriceEl && discountPriceEl) {
-                        // Standard discount case
-                        hargaAsli = originalPriceEl.textContent.trim();
-                        hargaDiscount = discountPriceEl.textContent.trim();
-                    } else {
-                        // Check for single price (no discount)
-                        const singlePriceEl = item.querySelector('.nW_6Oi:not(.PNlXhK)'); // Regular price without discount class
-                        if (singlePriceEl) {
-                            hargaAsli = singlePriceEl.textContent.trim();
-                            hargaDiscount = hargaAsli; // Same as original if no discount
-                        } else {
-                            // Fallback - try to find any price element
-                            const anyPriceEl = item.querySelector('.nW_6Oi');
-                            if (anyPriceEl) {
-                                hargaAsli = anyPriceEl.textContent.trim();
-                                hargaDiscount = hargaAsli;
-                            }
-                        }
+                        originalPriceText = originalPriceEl.textContent.trim();
+                        discountPriceText = discountPriceEl.textContent.trim();
+                    } else if (discountPriceEl) {
+                        discountPriceText = discountPriceEl.textContent.trim();
+                        originalPriceText = discountPriceText;
+                    } else if (regularPriceEl) {
+                        discountPriceText = regularPriceEl.textContent.trim();
+                        originalPriceText = discountPriceText;
                     }
 
-                    // Calculate item total using DISCOUNTED price
-                    const discountValue = parseCurrency(hargaDiscount);
+                    const discountValue = parseCurrency(discountPriceText);
                     const itemTotal = discountValue * quantity;
                     const totalPesanan = formatCurrency(itemTotal);
 
-                    if (name !== 'NOT FOUND') {
-                        items.push({
-                            name: name,
-                            hargaAsli: hargaAsli || '-',
-                            hargaDiscount: hargaDiscount || '-',
-                            quantity: quantity,
-                            total: itemTotal, // Store numeric value for calculations
-                            totalPesanan: totalPesanan
-                        });
-                    }
+                    items.push({
+                        name: name,
+                        originalPrice: originalPriceText || formatCurrency(discountValue),
+                        discountPrice: discountPriceText || formatCurrency(discountValue),
+                        quantity: quantity,
+                        total: itemTotal,
+                        totalPesanan: totalPesanan
+                    });
                 });
 
                 win.close();
@@ -1261,7 +1365,7 @@
                 if (items.length === 0) {
                     retryCount++;
                     if (retryCount > CONFIG.MAX_RETRIES) return null;
-                    updateStatus(`🔁 Retrying #${retryCount}`, 'warning');
+                    updateStatus(`🔁 Retrying #${retryCount} for ${url}`, 'warning');
                     await cancellableDelay(3000);
                     continue;
                 }
@@ -1274,7 +1378,7 @@
                     URL: url
                 };
             } catch (err) {
-                win.close();
+                try { win.close(); } catch (e) {}
                 retryCount++;
                 if (retryCount > CONFIG.MAX_RETRIES) {
                     showNotification(`❌ Error parsing order: ${err.message}`, 'error');
@@ -1297,10 +1401,10 @@
         const urls = urlInput.value
             .split('\n')
             .map(u => u.trim())
-            .filter(u => u.startsWith('https://shopee.co.id'));
+            .filter(u => u.includes('/user/purchase/order/'));
 
         if (!urls.length) {
-            showNotification("⚠️ No valid URLs found", 'error');
+            showNotification("⚠️ No valid order URLs found", 'error');
             resetUI();
             return;
         }
@@ -1312,7 +1416,6 @@
         for (const url of urls) {
             if (!isParsing) break;
 
-            // Update progress
             processedUrls++;
             const progressPercent = Math.round((processedUrls / totalUrls) * 100);
             updateStatus(`Processing order ${processedUrls} of ${totalUrls} (${progressPercent}%)`, 'info');
@@ -1322,7 +1425,6 @@
                 addResult(result);
                 currentEntry++;
 
-                // Add delay between orders
                 if (processedUrls < totalUrls) {
                     showProgressBar(CONFIG.BETWEEN_DELAY);
                     await cancellableDelay(CONFIG.BETWEEN_DELAY);
@@ -1332,14 +1434,12 @@
         }
 
         if (isParsing) {
-            // Calculate grand total
             const grandTotal = parsedData.reduce((sum, order) => {
-                return sum + order.items.reduce((itemSum, item) => {
+                return sum + (order.items || []).reduce((itemSum, item) => {
                     return itemSum + (item.total || 0);
                 }, 0);
             }, 0);
 
-            // Format the completion message with financial summary
             const completionMessage = `
 ✅ Parsing completed successfully!
 
@@ -1434,7 +1534,7 @@
     // === Initialize ===
     window.addEventListener('load', () => {
         updateStatus("Ready", 'info');
-        showNotification('Parser initialized successfully!', 'success');
+        showNotification('Shopee MY Financial Tracker ready!', 'success');
         makeDraggable(parserUI);
     });
 
@@ -1446,28 +1546,23 @@
 
         function dragMouseDown(e) {
             e.preventDefault();
-            // get the mouse cursor position at startup
             pos3 = e.clientX;
             pos4 = e.clientY;
             document.onmouseup = closeDragElement;
-            // call a function whenever the cursor moves
             document.onmousemove = elementDrag;
         }
 
         function elementDrag(e) {
             e.preventDefault();
-            // calculate the new cursor position
             pos1 = pos3 - e.clientX;
             pos2 = pos4 - e.clientY;
             pos3 = e.clientX;
             pos4 = e.clientY;
-            // set the element's new position
             element.style.top = (element.offsetTop - pos2) + "px";
             element.style.left = (element.offsetLeft - pos1) + "px";
         }
 
         function closeDragElement() {
-            // stop moving when mouse button is released
             document.onmouseup = null;
             document.onmousemove = null;
         }
@@ -1476,7 +1571,7 @@
     function showProgressBar(durationMs) {
         if (!progressBarContainer || !progressBar || !progressBarLabel) return;
         progressBarContainer.style.display = 'block';
-        progressBar.style.width = '0';
+        progressBar.style.width = '0%';
         let elapsed = 0;
         const interval = 100;
         const total = durationMs;
@@ -1485,7 +1580,7 @@
             const percent = Math.min(100, (elapsed / total) * 100);
             progressBar.style.width = percent + '%';
             const secondsLeft = Math.ceil((total - elapsed) / 1000);
-            progressBarLabel.textContent = `⏳ Waiting ${secondsLeft}s`;
+            progressBarLabel.textContent = `⏳ Delay ${secondsLeft}s`;
             if (elapsed < total && isParsing) {
                 setTimeout(update, interval);
             } else {
@@ -1500,9 +1595,8 @@
     }
 
     // Highlight GUIDE if not read before
-    if (guideBtn && !localStorage.getItem('guide_read')) {
+    if (guideBtn && !localStorage.getItem('guide_read_my')) {
         guideBtn.classList.add('guide-highlight');
-        // Add NEW badge
         const badge = document.createElement('span');
         badge.className = 'guide-badge';
         badge.textContent = 'NEW';
@@ -1510,13 +1604,12 @@
         guideBtn.appendChild(badge);
     }
 
-    // On GUIDE click, remove highlight and badge, set localStorage
     if (guideBtn) {
         guideBtn.addEventListener('click', () => {
             guideBtn.classList.remove('guide-highlight');
             const badge = guideBtn.querySelector('.guide-badge');
             if (badge) badge.remove();
-            localStorage.setItem('guide_read', '1');
+            localStorage.setItem('guide_read_my', '1');
         });
     }
 
