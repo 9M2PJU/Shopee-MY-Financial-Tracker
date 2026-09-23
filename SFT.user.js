@@ -947,38 +947,54 @@
     }
 
     async function fetchOrdersFromShopeeApi() {
-        updateStatus('⚡ Fetching order list directly from Shopee API...', 'info');
-        showNotification('⚡ Contacting Shopee Order API...', 'info');
+        updateStatus('⚡ Fetching complete order history directly from Shopee API...', 'info');
+        showNotification('⚡ Contacting Shopee Order API (All Pages)...', 'info');
         const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
-        const endpoints = [
-            '/api/v4/order/get_all_order_list?limit=50&offset=0&tab_id=3', // Completed
-            '/api/v4/order/get_all_order_list?limit=50&offset=0&tab_id=0', // All
-            '/api/v4/order/get_all_order_list?limit=50&offset=0',
-            '/api/v2/order/get_all_order_list?limit=50&offset=0'
-        ];
-
         const foundIds = new Set();
         const fetchFunc = (typeof unsafeWindow !== 'undefined' && unsafeWindow.fetch) ? unsafeWindow.fetch : window.fetch;
 
-        for (const ep of endpoints) {
-            try {
-                const res = await fetchFunc(origin + ep, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    credentials: 'include'
-                });
+        const tabs = [3, 0]; // 3 = Completed, 0 = All
 
-                if (res.ok) {
-                    const json = await res.json();
-                    extractOrderIdsFromJson(json, foundIds);
-                    if (foundIds.size > 0) break;
+        for (const tabId of tabs) {
+            let offset = 0;
+            const limit = 30;
+            let hasMore = true;
+
+            while (hasMore && offset <= 600) {
+                try {
+                    const url = `${origin}/api/v4/order/get_all_order_list?limit=${limit}&offset=${offset}&tab_id=${tabId}`;
+                    const res = await fetchFunc(url, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'include'
+                    });
+
+                    if (res.ok) {
+                        const json = await res.json();
+                        const beforeCount = foundIds.size;
+                        extractOrderIdsFromJson(json, foundIds);
+                        const newFound = foundIds.size - beforeCount;
+
+                        updateStatus(`⚡ API fetched ${foundIds.size} orders (Offset: ${offset})...`, 'info');
+
+                        if (newFound === 0) {
+                            hasMore = false;
+                        } else {
+                            offset += limit;
+                            await cancellableDelay(300);
+                        }
+                    } else {
+                        hasMore = false;
+                    }
+                } catch (err) {
+                    console.warn('Shopee API fetch error:', err);
+                    hasMore = false;
                 }
-            } catch (err) {
-                console.warn('Shopee API fetch error:', err);
             }
+            if (foundIds.size > 0) break;
         }
 
         if (foundIds.size > 0) {
@@ -986,79 +1002,12 @@
             const set = new Set(existing);
             foundIds.forEach(id => set.add(`${origin}/user/purchase/order/${id}`));
             urlInput.value = Array.from(set).join('\n');
-            showNotification(`⚡ Loaded ${set.size} total order link(s) via API!`, 'success');
+            showNotification(`⚡ Successfully loaded ${set.size} total orders across your entire purchase history!`, 'success');
             updateStatus(`⚡ API loaded ${set.size} orders. Click [▶️ Start Parsing] to calculate.`, 'success');
             return set.size;
         } else {
             showNotification('⚠️ Shopee API returned 0 orders. Make sure you are logged in.', 'warning');
-            updateStatus('⚠️ API found no orders. Try [📜 Auto-Scroll & Extract] or scrolling manually.', 'warning');
-            return 0;
-        }
-    }
-
-    async function extractOrderLinks(silent = false) {
-        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
-        const foundUrls = new Set();
-
-        // 1. Scan all <a> anchor elements
-        const anchors = Array.from(document.querySelectorAll('a[href]'));
-        anchors.forEach(a => {
-            const href = a.getAttribute('href') || a.href || '';
-            if (href.includes('/order') || href.includes('/purchase') || href.includes('order_id')) {
-                const orderNumber = extractOrderNumber(href);
-                if (orderNumber) {
-                    foundUrls.add(`${origin}/user/purchase/order/${orderNumber}`);
-                } else if (href.includes('/user/purchase/order')) {
-                    const full = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
-                    foundUrls.add(full);
-                }
-            }
-        });
-
-        // 2. Scan data-* attributes
-        document.querySelectorAll('[data-order-id], [data-order-sn], [data-orderid], [data-sn]').forEach(el => {
-            const id = el.dataset.orderId || el.dataset.orderSn || el.dataset.orderid || el.dataset.sn;
-            if (id) {
-                foundUrls.add(`${origin}/user/purchase/order/${id}`);
-            }
-        });
-
-        // 3. Scan DOM text for Shopee Order SN patterns (YYMMDD+alphanumeric, e.g. 240924ABC123)
-        const bodyText = document.body.innerText || '';
-        const snMatches = bodyText.match(/\b2[0-9](?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])[A-Za-z0-9_-]{5,}\b/g) || [];
-        snMatches.forEach(sn => {
-            foundUrls.add(`${origin}/user/purchase/order/${sn}`);
-        });
-
-        // 4. Fallback: If nothing found in DOM, query Shopee API
-        if (foundUrls.size === 0) {
-            try {
-                const apiCount = await fetchOrdersFromShopeeApi();
-                if (apiCount > 0) return apiCount;
-            } catch (e) {}
-        }
-
-        if (foundUrls.size > 0) {
-            const existingUrls = urlInput.value.split('\n').map(u => normalizeOrderUrl(u)).filter(Boolean);
-            const allUrlsSet = new Set(existingUrls);
-            foundUrls.forEach(u => allUrlsSet.add(u));
-
-            urlInput.value = Array.from(allUrlsSet).join('\n');
-            if (!silent) {
-                showNotification(`✅ Found ${allUrlsSet.size} order link(s)!`, 'success');
-                updateStatus(`✅ ${allUrlsSet.size} order link(s) ready in box. Click [▶️ Start Parsing] to process.`, 'info');
-            }
-            return allUrlsSet.size;
-        } else {
-            if (!silent) {
-                if (!window.location.href.includes('/user/purchase')) {
-                    showNotification('👉 Please click [🛒 Go to My Purchases] to open your orders page!', 'warning');
-                    updateStatus('👉 Please click [🛒 Go to My Purchases] to open your orders page.', 'warning');
-                } else {
-                    showNotification('⚠️ No orders found on screen. Click [⚡ Fetch Orders (API)] or [📜 Auto-Scroll].', 'warning');
-                    updateStatus('⚠️ Please scroll down or click [⚡ Fetch Orders (API)].', 'warning');
-                }
-            }
+            updateStatus('⚠️ API found no orders. Try [📜 Auto-Scroll & Extract] to load on screen.', 'warning');
             return 0;
         }
     }
@@ -1073,28 +1022,68 @@
         if (isAutoScrolling) return;
         isAutoScrolling = true;
         autoscrollBtn.disabled = true;
-        updateStatus('📜 Auto-scrolling page to load orders from Shopee...', 'info');
-        showNotification('📜 Auto-scrolling down to trigger order loading...', 'info');
+        stopBtn.disabled = false;
+        updateStatus('📜 Auto-scrolling to the very end of your purchase history...', 'info');
+        showNotification('📜 Auto-scrolling to the end... Click [⏹️ Stop] anytime to halt.', 'info');
+
+        let noChangeCount = 0;
+        let lastHeight = 0;
+        let step = 0;
+        const maxSteps = 200; // Allows scrolling through all past purchases
 
         try {
-            for (let i = 1; i <= 6; i++) {
+            while (isAutoScrolling && step < maxSteps) {
+                step++;
+
+                // Scroll to bottom
                 window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                await cancellableDelay(1200);
-                extractOrderLinks(true);
+
+                // Also click any 'Load More' or pagination buttons if present
+                const loadMoreBtns = Array.from(document.querySelectorAll('button, a')).filter(el => {
+                    const text = (el.textContent || '').toLowerCase().trim();
+                    return text === 'load more' || text === 'see more' || text === 'muat lagi' || text === 'lebih banyak';
+                });
+                loadMoreBtns.forEach(btn => {
+                    try { btn.click(); } catch (e) {}
+                });
+
+                await cancellableDelay(1600);
+                if (!isAutoScrolling) break;
+
+                await extractOrderLinks(true);
                 const currentCount = getValidOrderUrls().length;
-                updateStatus(`📜 Scrolling step ${i}/6... (Captured ${currentCount} orders so far)`, 'info');
+                const currentHeight = document.body.scrollHeight;
+
+                updateStatus(`📜 Scrolling step ${step}... (Captured ${currentCount} orders so far | Click Stop to finish)`, 'info');
+
+                // Check if page height stopped expanding
+                if (currentHeight === lastHeight) {
+                    noChangeCount++;
+                    if (noChangeCount === 1) {
+                        window.scrollBy(0, -400);
+                        await cancellableDelay(600);
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    }
+                    if (noChangeCount >= 3) {
+                        // Reached absolute end of page
+                        break;
+                    }
+                } else {
+                    noChangeCount = 0;
+                    lastHeight = currentHeight;
+                }
             }
         } finally {
             isAutoScrolling = false;
             autoscrollBtn.disabled = false;
+            if (!isParsing) stopBtn.disabled = true;
         }
 
         const totalLinks = getValidOrderUrls().length;
         if (totalLinks > 0) {
-            showNotification(`✅ Auto-scroll complete! Loaded ${totalLinks} order(s).`, 'success');
-            updateStatus(`✅ Ready! ${totalLinks} order link(s) loaded. Click [▶️ Start Parsing] to begin.`, 'success');
+            showNotification(`✅ Reached the end! Loaded ${totalLinks} total order(s).`, 'success');
+            updateStatus(`✅ Complete! ${totalLinks} order link(s) captured. Click [▶️ Start Parsing] to calculate.`, 'success');
         } else {
-            // Try API fetch as seamless fallback
             await fetchOrdersFromShopeeApi();
         }
     }
