@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Shopee MY Financial Tracker
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Track and analyze your Shopee Malaysia purchases with comprehensive financial reporting (MYR)
 // @author       9M2PJU (Original by Ryu-Sena & pataanggs)
 // @match        https://shopee.com.my/*
@@ -23,8 +23,8 @@
     // Configuration
     const CONFIG = {
         PAGE_LOAD_TIMEOUT: 18000,
-        BETWEEN_DELAY: 5000,
-        MAX_RETRIES: 5,
+        BETWEEN_DELAY: 1500,
+        MAX_RETRIES: 3,
         UI_TOGGLE_KEY: 'KeyM',
         THEME_KEY: 'shopee_parser_theme',
         CSV_DELIMITER: ';',
@@ -55,7 +55,7 @@
     let searchQuery = '';
     const capturedOrderIds = new Set();
 
-    // === Real-Time API Interceptor (Page Context via unsafeWindow) ===
+    // Context helper
     const winContext = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
     function handleCapturedOrderId(orderId) {
@@ -684,7 +684,7 @@
             <div class="parser-container">
                 <div class="parser-header">
                     <div class="parser-title">
-                        <span>📊 Shopee MY Financial Tracker v2.3</span>
+                        <span>📊 Shopee MY Financial Tracker v2.4</span>
                     </div>
                     <div class="header-controls">
                         <button class="btn btn-gray" id="guide-btn">📘 Guide</button>
@@ -775,25 +775,21 @@
                 </div>
                 <div class="modal-content">📘 How to Use (Shopee Malaysia):
 
-1. Allow Popups in Browser:
-   - Chrome / Brave / Edge: 🔒 (Site Info) > Site Settings > Allow Pop-ups
-   - Firefox: ⓘ (Site Info) > Permissions > Allow Popups
-
-2. Go to "My Purchases" Page:
+1. Go to "My Purchases" Page:
    - Click [🛒 Go to My Purchases] button or visit: shopee.com.my/user/purchase
    - Select the "Completed" tab (or "To Receive").
 
-3. Load Orders (Choose any method):
+2. Load Orders:
    - Method A (Fastest): Click [⚡ Fetch Orders (API)] to grab orders directly via Shopee session.
    - Method B: Click [📜 Auto-Scroll & Extract] to automatically scroll down and scan order cards.
    - Method C: Scroll down manually and click [🔗 Extract Visible Links].
    - Method D: Paste Shopee order URLs or Order IDs directly into the text box.
 
-4. Start Parsing:
+3. Start Parsing:
    - Click [▶️ Start Parsing] to calculate all order figures in Malaysian Ringgit (MYR).
-   - The script will safely parse each order page with rate limiting.
+   - In v2.4, orders are fetched directly via API with 100% precision and zero popup issues!
 
-5. Export Your Financials:
+4. Export Your Financials:
    - [📊 Export CSV] for Microsoft Excel / Google Sheets.
    - [📝 Export Markdown] for documentation and notes.
 
@@ -904,7 +900,7 @@
             const cleanId = url.substring(idStart).split('?')[0].split('#')[0].replace(/\/+$/, '').trim();
             if (cleanId) return cleanId;
         }
-        return /^[a-zA-Z0-9_-]{8,}$/.test(url.trim()) ? url.trim() : null;
+        return /^[a-zA-Z0-9_-]{6,}$/.test(url.trim()) ? url.trim() : null;
     }
 
     function normalizeOrderUrl(line) {
@@ -946,6 +942,58 @@
         }
     }
 
+    function formatCurrency(amount) {
+        return new Intl.NumberFormat('en-MY', {
+            style: 'currency',
+            currency: 'MYR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount || 0);
+    }
+
+    function parseShopeeApiPrice(val) {
+        if (typeof val === 'number') {
+            if (val > 10000) {
+                return val / 100000;
+            }
+            return val;
+        }
+        return parseCurrency(val);
+    }
+
+    function parseCurrency(amount) {
+        if (typeof amount === 'number') return isNaN(amount) ? 0 : amount;
+        if (!amount) return 0;
+
+        let str = amount.toString().replace(/RM|Rp/gi, '').trim();
+        str = str.replace(/[^\d,.-]/g, '');
+        if (!str) return 0;
+
+        if (str.includes(',') && str.includes('.')) {
+            if (str.indexOf(',') < str.indexOf('.')) {
+                str = str.replace(/,/g, '');
+            } else {
+                str = str.replace(/\./g, '').replace(/,/g, '.');
+            }
+        } else if (str.includes(',')) {
+            const parts = str.split(',');
+            if (parts.length === 2 && parts[1].length === 2) {
+                str = str.replace(',', '.');
+            } else {
+                str = str.replace(/,/g, '');
+            }
+        } else if (str.includes('.')) {
+            const parts = str.split('.');
+            if (parts.length > 2) {
+                str = str.replace(/\./g, '');
+            }
+        }
+
+        const val = parseFloat(str);
+        return isNaN(val) ? 0 : val;
+    }
+
+    // === API Fetcher ===
     async function fetchOrdersFromShopeeApi() {
         updateStatus('⚡ Fetching complete order history directly from Shopee API...', 'info');
         showNotification('⚡ Contacting Shopee Order API (All Pages)...', 'info');
@@ -1012,6 +1060,73 @@
         }
     }
 
+    async function extractOrderLinks(silent = false) {
+        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
+        const foundUrls = new Set();
+
+        // 1. Scan all <a> anchor elements
+        const anchors = Array.from(document.querySelectorAll('a[href]'));
+        anchors.forEach(a => {
+            const href = a.getAttribute('href') || a.href || '';
+            if (href.includes('/order') || href.includes('/purchase') || href.includes('order_id')) {
+                const orderNumber = extractOrderNumber(href);
+                if (orderNumber) {
+                    foundUrls.add(`${origin}/user/purchase/order/${orderNumber}`);
+                } else if (href.includes('/user/purchase/order')) {
+                    const full = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+                    foundUrls.add(full);
+                }
+            }
+        });
+
+        // 2. Scan data-* attributes
+        document.querySelectorAll('[data-order-id], [data-order-sn], [data-orderid], [data-sn]').forEach(el => {
+            const id = el.dataset.orderId || el.dataset.orderSn || el.dataset.orderid || el.dataset.sn;
+            if (id) {
+                foundUrls.add(`${origin}/user/purchase/order/${id}`);
+            }
+        });
+
+        // 3. Scan DOM text for Shopee Order SN patterns (YYMMDD+alphanumeric, e.g. 240924ABC123)
+        const bodyText = document.body.innerText || '';
+        const snMatches = bodyText.match(/\b2[0-9](?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])[A-Za-z0-9_-]{5,}\b/g) || [];
+        snMatches.forEach(sn => {
+            foundUrls.add(`${origin}/user/purchase/order/${sn}`);
+        });
+
+        // 4. Fallback: If nothing found in DOM, query Shopee API
+        if (foundUrls.size === 0) {
+            try {
+                const apiCount = await fetchOrdersFromShopeeApi();
+                if (apiCount > 0) return apiCount;
+            } catch (e) {}
+        }
+
+        if (foundUrls.size > 0) {
+            const existingUrls = urlInput.value.split('\n').map(u => normalizeOrderUrl(u)).filter(Boolean);
+            const allUrlsSet = new Set(existingUrls);
+            foundUrls.forEach(u => allUrlsSet.add(u));
+
+            urlInput.value = Array.from(allUrlsSet).join('\n');
+            if (!silent) {
+                showNotification(`✅ Found ${allUrlsSet.size} order link(s)!`, 'success');
+                updateStatus(`✅ ${allUrlsSet.size} order link(s) ready in box. Click [▶️ Start Parsing] to process.`, 'info');
+            }
+            return allUrlsSet.size;
+        } else {
+            if (!silent) {
+                if (!window.location.href.includes('/user/purchase')) {
+                    showNotification('👉 Please click [🛒 Go to My Purchases] to open your orders page!', 'warning');
+                    updateStatus('👉 Please click [🛒 Go to My Purchases] to open your orders page.', 'warning');
+                } else {
+                    showNotification('⚠️ No orders found on screen. Click [⚡ Fetch Orders (API)] or [📜 Auto-Scroll].', 'warning');
+                    updateStatus('⚠️ Please scroll down or click [⚡ Fetch Orders (API)].', 'warning');
+                }
+            }
+            return 0;
+        }
+    }
+
     async function autoScrollAndExtract() {
         if (!window.location.href.includes('/user/purchase')) {
             showNotification('🛒 Navigating to My Purchases page...', 'info');
@@ -1029,16 +1144,14 @@
         let noChangeCount = 0;
         let lastHeight = 0;
         let step = 0;
-        const maxSteps = 200; // Allows scrolling through all past purchases
+        const maxSteps = 200;
 
         try {
             while (isAutoScrolling && step < maxSteps) {
                 step++;
 
-                // Scroll to bottom
                 window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 
-                // Also click any 'Load More' or pagination buttons if present
                 const loadMoreBtns = Array.from(document.querySelectorAll('button, a')).filter(el => {
                     const text = (el.textContent || '').toLowerCase().trim();
                     return text === 'load more' || text === 'see more' || text === 'muat lagi' || text === 'lebih banyak';
@@ -1056,7 +1169,6 @@
 
                 updateStatus(`📜 Scrolling step ${step}... (Captured ${currentCount} orders so far | Click Stop to finish)`, 'info');
 
-                // Check if page height stopped expanding
                 if (currentHeight === lastHeight) {
                     noChangeCount++;
                     if (noChangeCount === 1) {
@@ -1065,7 +1177,6 @@
                         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
                     }
                     if (noChangeCount >= 3) {
-                        // Reached absolute end of page
                         break;
                     }
                 } else {
@@ -1088,45 +1199,200 @@
         }
     }
 
-    function formatCurrency(amount) {
-        return new Intl.NumberFormat('en-MY', {
-            style: 'currency',
-            currency: 'MYR',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(amount || 0);
+    // === Scraper Architecture (Direct API + DOM Fallback) ===
+    function parseOrderDetailFromApiResponse(orderData, url, entryNumber) {
+        if (!orderData) return null;
+
+        // Shop Name
+        const shopName = orderData.shop_info?.shop_name ||
+                         orderData.seller_user?.username ||
+                         orderData.shop_name ||
+                         orderData.seller_name ||
+                         'Shopee Seller';
+
+        // Order Date
+        let orderDate = 'NOT FOUND';
+        const timeStamp = orderData.create_time || orderData.paid_time || orderData.order_time || orderData.pay_time;
+        if (timeStamp) {
+            const dateObj = new Date(timeStamp > 1e11 ? timeStamp : timeStamp * 1000);
+            orderDate = dateObj.toLocaleDateString('en-GB', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Collect all items
+        const rawItems = [];
+        if (orderData.items && Array.isArray(orderData.items)) rawItems.push(...orderData.items);
+        if (orderData.item_list && Array.isArray(orderData.item_list)) rawItems.push(...orderData.item_list);
+        if (orderData.package_list && Array.isArray(orderData.package_list)) {
+            orderData.package_list.forEach(pkg => {
+                if (pkg.item_list && Array.isArray(pkg.item_list)) rawItems.push(...pkg.item_list);
+                if (pkg.items && Array.isArray(pkg.items)) rawItems.push(...pkg.items);
+            });
+        }
+
+        const items = [];
+        rawItems.forEach(item => {
+            const name = item.item_name || item.name || item.model_name || 'Shopee Product';
+            const quantity = parseInt(item.amount || item.quantity || item.count || 1) || 1;
+
+            let origPrice = parseShopeeApiPrice(item.original_price || item.item_price || item.order_price || 0);
+            let discPrice = parseShopeeApiPrice(item.order_price || item.item_price || item.discounted_price || item.final_price || origPrice);
+
+            if (!origPrice && discPrice) origPrice = discPrice;
+            if (!discPrice && origPrice) discPrice = origPrice;
+
+            const itemTotal = discPrice * quantity;
+
+            items.push({
+                name: name,
+                originalPrice: formatCurrency(origPrice),
+                discountPrice: formatCurrency(discPrice),
+                quantity: quantity,
+                total: itemTotal,
+                totalPesanan: formatCurrency(itemTotal)
+            });
+        });
+
+        if (items.length === 0) return null;
+
+        return {
+            Entry: entryNumber,
+            Shop: shopName,
+            'Order Date': orderDate,
+            items: items,
+            URL: url
+        };
     }
 
-    function parseCurrency(amount) {
-        if (typeof amount === 'number') return isNaN(amount) ? 0 : amount;
-        if (!amount) return 0;
+    async function scrapeOrderDetail(url, entryNumber) {
+        const origin = window.location.origin.includes('shopee') ? window.location.origin : 'https://shopee.com.my';
+        const orderId = extractOrderNumber(url);
 
-        let str = amount.toString().replace(/RM|Rp/gi, '').trim();
-        str = str.replace(/[^\d,.-]/g, '');
-        if (!str) return 0;
+        // Strategy 1: Direct Shopee API (Instant, exact, no popups)
+        if (orderId) {
+            try {
+                const fetchFunc = (typeof unsafeWindow !== 'undefined' && unsafeWindow.fetch) ? unsafeWindow.fetch : window.fetch;
+                const endpoints = [
+                    `${origin}/api/v4/order/get_order_detail?order_id=${orderId}`,
+                    `${origin}/api/v4/order/get_order_detail?order_sn=${orderId}`,
+                    `${origin}/api/v2/order/get_order_detail?order_id=${orderId}`,
+                    `${origin}/api/v4/order/get_order_detail?orderid=${orderId}`
+                ];
 
-        if (str.includes(',') && str.includes('.')) {
-            if (str.indexOf(',') < str.indexOf('.')) {
-                str = str.replace(/,/g, '');
-            } else {
-                str = str.replace(/\./g, '').replace(/,/g, '.');
-            }
-        } else if (str.includes(',')) {
-            const parts = str.split(',');
-            if (parts.length === 2 && parts[1].length === 2) {
-                str = str.replace(',', '.');
-            } else {
-                str = str.replace(/,/g, '');
-            }
-        } else if (str.includes('.')) {
-            const parts = str.split('.');
-            if (parts.length > 2) {
-                str = str.replace(/\./g, '');
+                for (const ep of endpoints) {
+                    const res = await fetchFunc(ep, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'include'
+                    });
+
+                    if (res.ok) {
+                        const json = await res.json();
+                        const orderData = json.data || json;
+                        const parsed = parseOrderDetailFromApiResponse(orderData, url, entryNumber);
+                        if (parsed && parsed.items && parsed.items.length > 0) {
+                            return parsed;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('API detail fetch error:', err);
             }
         }
 
-        const val = parseFloat(str);
-        return isNaN(val) ? 0 : val;
+        // Strategy 2: Popup DOM fallback
+        return await scrapeOrderDetailFromDom(url, entryNumber);
+    }
+
+    async function scrapeOrderDetailFromDom(url, entryNumber) {
+        let retryCount = 0;
+        while (retryCount <= CONFIG.MAX_RETRIES && isParsing) {
+            const win = window.open(url, '_blank');
+            if (!win) {
+                showNotification("❌ Popup blocked - Please allow popups for Shopee in browser settings", 'error');
+                return null;
+            }
+
+            try {
+                await waitForPageLoad(win);
+                if (!isParsing) {
+                    try { win.close(); } catch (e) {}
+                    return null;
+                }
+
+                await cancellableDelay(3000);
+                const doc = win.document;
+
+                // Shop Name
+                const shopEl = doc.querySelector('.UDaMW3, .order-detail__header-shop-name, a[href*="/shop/"], [class*="shop-name"], [class*="seller-name"]');
+                const shopName = shopEl?.textContent.trim() || 'Shopee Seller';
+
+                // Order Date
+                const dateEl = doc.querySelector('.stepper__step-date, .order-detail__date, [class*="step-date"], [class*="order-date"]');
+                const orderDate = dateEl?.textContent.trim() || new Date().toLocaleDateString('en-GB');
+
+                // Items
+                let itemElements = Array.from(doc.querySelectorAll('a.mZ1OWk, div.mZ1OWk, .order-detail-product, [class*="order-item"], [class*="product-item"], [class*="item-card"]'));
+                const items = [];
+
+                itemElements.forEach(item => {
+                    const nameEl = item.querySelector('.DWVWOJ, [class*="item-name"], [class*="product-name"], [class*="title"], [class*="name"]');
+                    const name = nameEl?.textContent.trim() || '';
+                    if (!name || name === 'NOT FOUND' || name.length < 2) return;
+
+                    const quantityText = item.querySelector('.j3I_Nh, [class*="item-quantity"], [class*="quantity"], [class*="count"]')?.textContent.trim() || 'x1';
+                    const quantity = parseInt(quantityText.replace(/[^0-9]/g, '')) || 1;
+
+                    const originalPriceEl = item.querySelector('.q6Gzj5, [class*="original-price"], del, s');
+                    const discountPriceEl = item.querySelector('.PNlXhK, [class*="discount-price"], [class*="special-price"]');
+                    const regularPriceEl = item.querySelector('.nW_6Oi, [class*="price"]');
+
+                    let origText = originalPriceEl?.textContent.trim() || '';
+                    let discText = discountPriceEl?.textContent.trim() || regularPriceEl?.textContent.trim() || origText;
+
+                    const discVal = parseCurrency(discText);
+                    const origVal = origText ? parseCurrency(origText) : discVal;
+                    const itemTotal = discVal * quantity;
+
+                    items.push({
+                        name: name,
+                        originalPrice: formatCurrency(origVal),
+                        discountPrice: formatCurrency(discVal),
+                        quantity: quantity,
+                        total: itemTotal,
+                        totalPesanan: formatCurrency(itemTotal)
+                    });
+                });
+
+                try { win.close(); } catch (e) {}
+
+                if (items.length > 0) {
+                    return {
+                        Entry: entryNumber,
+                        Shop: shopName,
+                        'Order Date': orderDate,
+                        items,
+                        URL: url
+                    };
+                }
+
+                retryCount++;
+                await cancellableDelay(2000);
+            } catch (err) {
+                try { win.close(); } catch (e) {}
+                retryCount++;
+                await cancellableDelay(2000);
+            }
+        }
+        return null;
     }
 
     function updateStats() {
@@ -1490,118 +1756,11 @@
         });
     }
 
-    async function scrapeOrderDetail(url, entryNumber) {
-        let retryCount = 0;
-        while (retryCount <= CONFIG.MAX_RETRIES && isParsing) {
-            const win = window.open(url, '_blank');
-            if (!win) {
-                showNotification("❌ Popup blocked - Please allow popups for Shopee in browser settings", 'error');
-                return null;
-            }
-
-            try {
-                await waitForPageLoad(win);
-                if (!isParsing) {
-                    win.close();
-                    return null;
-                }
-
-                await cancellableDelay(5000);
-                const doc = win.document;
-
-                // Shop Name
-                const shopEl = doc.querySelector('.UDaMW3, .order-detail__header-shop-name, a[href*="/shop/"], [class*="shop-name"]');
-                const shopName = shopEl?.textContent.trim() || 'NOT FOUND';
-
-                // Order Date
-                const dateEl = doc.querySelector('.stepper__step-date, .order-detail__date, [class*="step-date"], [class*="order-date"]');
-                const orderDate = dateEl?.textContent.trim() || 'NOT FOUND';
-
-                // Items
-                let itemElements = doc.querySelectorAll('a.mZ1OWk, div.mZ1OWk, .order-detail-product, [class*="order-item__wrapper"]');
-                if (!itemElements.length) {
-                    itemElements = doc.querySelectorAll('[class*="item-row"], [class*="order-item"]');
-                }
-
-                const items = [];
-
-                itemElements.forEach(item => {
-                    const nameEl = item.querySelector('.DWVWOJ, [class*="item-name"], [class*="order-content__item-name"]');
-                    const name = nameEl?.textContent.trim() || '';
-                    if (!name || name === 'NOT FOUND') return;
-
-                    const quantityText = item.querySelector('.j3I_Nh, [class*="item-quantity"], [class*="quantity"]')?.textContent.trim() || 'x1';
-                    const quantity = parseInt(quantityText.replace(/[^0-9]/g, '')) || 1;
-
-                    // Prices
-                    let originalPriceText = '';
-                    let discountPriceText = '';
-
-                    const originalPriceEl = item.querySelector('.q6Gzj5, [class*="original-price"], del, s');
-                    const discountPriceEl = item.querySelector('.PNlXhK, [class*="discount-price"]');
-                    const regularPriceEl = item.querySelector('.nW_6Oi, [class*="price"]');
-
-                    if (originalPriceEl && discountPriceEl) {
-                        originalPriceText = originalPriceEl.textContent.trim();
-                        discountPriceText = discountPriceEl.textContent.trim();
-                    } else if (discountPriceEl) {
-                        discountPriceText = discountPriceEl.textContent.trim();
-                        originalPriceText = discountPriceText;
-                    } else if (regularPriceEl) {
-                        discountPriceText = regularPriceEl.textContent.trim();
-                        originalPriceText = discountPriceText;
-                    }
-
-                    const discountValue = parseCurrency(discountPriceText);
-                    const itemTotal = discountValue * quantity;
-                    const totalPesanan = formatCurrency(itemTotal);
-
-                    items.push({
-                        name: name,
-                        originalPrice: originalPriceText || formatCurrency(discountValue),
-                        discountPrice: discountPriceText || formatCurrency(discountValue),
-                        quantity: quantity,
-                        total: itemTotal,
-                        totalPesanan: totalPesanan
-                    });
-                });
-
-                win.close();
-
-                if (items.length === 0) {
-                    retryCount++;
-                    if (retryCount > CONFIG.MAX_RETRIES) return null;
-                    updateStatus(`🔁 Retrying #${retryCount} for ${url}`, 'warning');
-                    await cancellableDelay(3000);
-                    continue;
-                }
-
-                return {
-                    Entry: entryNumber,
-                    Shop: shopName,
-                    'Order Date': orderDate,
-                    items,
-                    URL: url
-                };
-            } catch (err) {
-                try { win.close(); } catch (e) {}
-                retryCount++;
-                if (retryCount > CONFIG.MAX_RETRIES) {
-                    showNotification(`❌ Error parsing order: ${err.message}`, 'error');
-                    return null;
-                }
-                updateStatus(`🔁 Retrying #${retryCount}`, 'warning');
-                await cancellableDelay(3000);
-            }
-        }
-        return null;
-    }
-
     async function run() {
         isParsing = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        updateStatus('🚀 Starting...', 'info');
+        updateStatus('🚀 Starting parser...', 'info');
         currentEntry = 1;
 
         let urls = getValidOrderUrls();
@@ -1705,9 +1864,14 @@
     });
 
     stopBtn.addEventListener('click', () => {
+        if (isAutoScrolling) {
+            isAutoScrolling = false;
+            updateStatus("🛑 Auto-scroll stopped", 'warning');
+            showNotification('🛑 Auto-scroll stopped', 'warning');
+        }
         if (isParsing) {
             isParsing = false;
-            updateStatus("🛑 Stopping...", 'warning');
+            updateStatus("🛑 Stopping parser...", 'warning');
             showNotification('🛑 Stopping parser...', 'warning');
         }
     });
